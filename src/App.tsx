@@ -596,12 +596,19 @@ const Warhammer40kAssistant = () => {
   const generateSuggestions = () => {
     const newSuggestions: any[] = [];
 
-    // Suggestions générales pour la phase
+    // Suggestions générales pour la phase (TOUJOURS affichées)
     if (currentPhase === 'command') {
       newSuggestions.push({
         id: 'command-phase-start',
         text: '📋 Début de phase de commandement',
         detail: 'Gagnez 1 CP, activez les capacités de commandement',
+        type: 'phase',
+        phase: 'command'
+      });
+      newSuggestions.push({
+        id: 'command-abilities',
+        text: '⚡ Capacités de commandement',
+        detail: 'Activez les capacités spéciales de vos personnages et unités',
         type: 'phase',
         phase: 'command'
       });
@@ -615,6 +622,20 @@ const Warhammer40kAssistant = () => {
         type: 'phase',
         phase: 'movement'
       });
+      newSuggestions.push({
+        id: 'movement-advance',
+        text: '🏃💨 Mouvement d\'avance',
+        detail: 'Les unités peuvent Avancer (+D6" de mouvement, pas de tir)',
+        type: 'phase',
+        phase: 'movement'
+      });
+      newSuggestions.push({
+        id: 'movement-fallback',
+        text: '🔄 Repli',
+        detail: 'Les unités engagées peuvent se replier (pas de tir ni charge)',
+        type: 'phase',
+        phase: 'movement'
+      });
     }
 
     if (currentPhase === 'shooting') {
@@ -622,6 +643,20 @@ const Warhammer40kAssistant = () => {
         id: 'shooting-phase',
         text: '🎯 Phase de tir',
         detail: 'Sélectionnez les cibles et effectuez vos attaques à distance',
+        type: 'phase',
+        phase: 'shooting'
+      });
+      newSuggestions.push({
+        id: 'shooting-targets',
+        text: '🎯 Sélection des cibles',
+        detail: 'Choisissez les unités ennemies à cibler avec vos armes',
+        type: 'phase',
+        phase: 'shooting'
+      });
+      newSuggestions.push({
+        id: 'shooting-los',
+        text: '👁️ Ligne de vue',
+        detail: 'Vérifiez que vos unités ont une ligne de vue claire',
         type: 'phase',
         phase: 'shooting'
       });
@@ -635,6 +670,20 @@ const Warhammer40kAssistant = () => {
         type: 'phase',
         phase: 'charge'
       });
+      newSuggestions.push({
+        id: 'charge-declare',
+        text: '📢 Déclaration de charge',
+        detail: 'Déclarez les cibles de charge (à 12" ou moins)',
+        type: 'phase',
+        phase: 'charge'
+      });
+      newSuggestions.push({
+        id: 'charge-roll',
+        text: '🎲 Jets de charge',
+        detail: 'Lancez 2D6 pour déterminer la distance de charge',
+        type: 'phase',
+        phase: 'charge'
+      });
     }
 
     if (currentPhase === 'fight') {
@@ -644,6 +693,37 @@ const Warhammer40kAssistant = () => {
         detail: 'Résolvez les combats au corps à corps',
         type: 'phase',
         phase: 'fight'
+      });
+      newSuggestions.push({
+        id: 'fight-activation',
+        text: '🎯 Activation des unités',
+        detail: 'Alternez l\'activation avec l\'adversaire',
+        type: 'phase',
+        phase: 'fight'
+      });
+      newSuggestions.push({
+        id: 'fight-pile-in',
+        text: '↗️ Pile In et Consolidation',
+        detail: 'Déplacez vos modèles de 3" avant et après le combat',
+        type: 'phase',
+        phase: 'fight'
+      });
+    }
+
+    if (currentPhase === 'morale') {
+      newSuggestions.push({
+        id: 'morale-phase',
+        text: '😰 Phase de moral',
+        detail: 'Effectuez les tests de Battle-shock pour les unités Below Half-strength',
+        type: 'phase',
+        phase: 'morale'
+      });
+      newSuggestions.push({
+        id: 'morale-battleshock',
+        text: '💀 Tests de Battle-shock',
+        detail: 'Lancez 2D6 ≤ Leadership pour les unités affaiblies',
+        type: 'phase',
+        phase: 'morale'
       });
     }
 
@@ -694,7 +774,7 @@ const Warhammer40kAssistant = () => {
         
         findAbilities(unit.selections);
 
-        // Suggestions de stratagèmes pour l'unité sélectionnée
+        // Suggestions de stratagèmes pour l'unité sélectionnée (SEULEMENT si unité sélectionnée)
         const applicableStratagems = getApplicableStratagems(unit, currentPhase, activePlayer);
         
         applicableStratagems.forEach(stratagem => {
