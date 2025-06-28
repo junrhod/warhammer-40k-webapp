@@ -596,134 +596,115 @@ const Warhammer40kAssistant = () => {
   const generateSuggestions = () => {
     const newSuggestions: any[] = [];
 
-    // Suggestions générales pour la phase (TOUJOURS affichées)
-    if (currentPhase === 'command') {
-      newSuggestions.push({
-        id: 'command-phase-start',
-        text: '📋 Début de phase de commandement',
-        detail: 'Gagnez 1 CP, activez les capacités de commandement',
-        type: 'phase',
-        phase: 'command'
-      });
-      newSuggestions.push({
-        id: 'command-abilities',
-        text: '⚡ Capacités de commandement',
-        detail: 'Activez les capacités spéciales de vos personnages et unités',
-        type: 'phase',
-        phase: 'command'
-      });
-    }
-
-    if (currentPhase === 'movement') {
-      newSuggestions.push({
-        id: 'movement-phase',
-        text: '🏃 Phase de mouvement',
-        detail: 'Déplacez vos unités selon leur valeur de Mouvement',
-        type: 'phase',
-        phase: 'movement'
-      });
-      newSuggestions.push({
-        id: 'movement-advance',
-        text: '🏃💨 Mouvement d\'avance',
-        detail: 'Les unités peuvent Avancer (+D6" de mouvement, pas de tir)',
-        type: 'phase',
-        phase: 'movement'
-      });
-      newSuggestions.push({
-        id: 'movement-fallback',
-        text: '🔄 Repli',
-        detail: 'Les unités engagées peuvent se replier (pas de tir ni charge)',
-        type: 'phase',
-        phase: 'movement'
-      });
-    }
-
-    if (currentPhase === 'shooting') {
-      newSuggestions.push({
-        id: 'shooting-phase',
-        text: '🎯 Phase de tir',
-        detail: 'Sélectionnez les cibles et effectuez vos attaques à distance',
-        type: 'phase',
-        phase: 'shooting'
-      });
-      newSuggestions.push({
-        id: 'shooting-targets',
-        text: '🎯 Sélection des cibles',
-        detail: 'Choisissez les unités ennemies à cibler avec vos armes',
-        type: 'phase',
-        phase: 'shooting'
-      });
-      newSuggestions.push({
-        id: 'shooting-los',
-        text: '👁️ Ligne de vue',
-        detail: 'Vérifiez que vos unités ont une ligne de vue claire',
-        type: 'phase',
-        phase: 'shooting'
-      });
-    }
-
-    if (currentPhase === 'charge') {
-      newSuggestions.push({
-        id: 'charge-phase',
-        text: '⚡ Phase de charge',
-        detail: 'Déclarez et résolvez les charges',
-        type: 'phase',
-        phase: 'charge'
-      });
-      newSuggestions.push({
-        id: 'charge-declare',
-        text: '📢 Déclaration de charge',
-        detail: 'Déclarez les cibles de charge (à 12" ou moins)',
-        type: 'phase',
-        phase: 'charge'
-      });
-      newSuggestions.push({
-        id: 'charge-roll',
-        text: '🎲 Jets de charge',
-        detail: 'Lancez 2D6 pour déterminer la distance de charge',
-        type: 'phase',
-        phase: 'charge'
-      });
-    }
-
-    if (currentPhase === 'fight') {
-      newSuggestions.push({
-        id: 'fight-phase',
-        text: '⚔️ Phase de combat',
-        detail: 'Résolvez les combats au corps à corps',
-        type: 'phase',
-        phase: 'fight'
-      });
-      newSuggestions.push({
-        id: 'fight-activation',
-        text: '🎯 Activation des unités',
-        detail: 'Alternez l\'activation avec l\'adversaire',
-        type: 'phase',
-        phase: 'fight'
-      });
-      newSuggestions.push({
-        id: 'fight-pile-in',
-        text: '↗️ Pile In et Consolidation',
-        detail: 'Déplacez vos modèles de 3" avant et après le combat',
-        type: 'phase',
-        phase: 'fight'
+    // Suggestions d'habilités de toutes les unités pertinentes pour la phase actuelle
+    if (armyData && armyData.units) {
+      armyData.units.forEach((unit: any) => {
+        const currentWounds = unitHealth[unit.id] || 0;
+        if (currentWounds > 0) { // Unité encore vivante
+          
+          // Chercher les capacités liées à la phase actuelle
+          const findPhaseAbilities = (selections: any[], unitName: string) => {
+            if (!selections) return;
+            
+            selections.forEach((selection: any) => {
+              // Capacités spécifiques à la phase de commandement
+              if (currentPhase === 'command') {
+                if (selection.name === 'Appraising Glare') {
+                  newSuggestions.push({
+                    id: `ability-${unit.id}-appraising-glare`,
+                    text: `✨ ${unitName}: Appraising Glare`,
+                    detail: 'Sélectionnez un objectif ennemi - les unités à proximité comptent +1 Judgement token (max 2)',
+                    type: 'ability',
+                    phase: 'command',
+                    unit: unitName
+                  });
+                }
+                if (selection.name === 'Grim Demeanour') {
+                  newSuggestions.push({
+                    id: `ability-${unit.id}-grim-demeanour`,
+                    text: `✨ ${unitName}: Grim Demeanour`,
+                    detail: 'Peut re-roll les tests Battle-shock et ignorer les modificateurs (sauf sauvegardes)',
+                    type: 'ability',
+                    phase: 'command',
+                    unit: unitName
+                  });
+                }
+              }
+              
+              // Capacités spécifiques à la phase de tir
+              if (currentPhase === 'shooting') {
+                if (selection.name && selection.name.toLowerCase().includes('weapon') || 
+                    selection.profiles?.some((p: any) => p.typeName === 'Weapon')) {
+                  newSuggestions.push({
+                    id: `ability-${unit.id}-${selection.name}`,
+                    text: `🔫 ${unitName}: ${selection.name}`,
+                    detail: 'Arme disponible pour le tir',
+                    type: 'ability',
+                    phase: 'shooting',
+                    unit: unitName
+                  });
+                }
+              }
+              
+              // Capacités spécifiques au combat
+              if (currentPhase === 'fight') {
+                if (selection.rules) {
+                  selection.rules.forEach((rule: any) => {
+                    if (rule.name && (rule.name.toLowerCase().includes('melee') || 
+                        rule.name.toLowerCase().includes('fight') ||
+                        rule.name.toLowerCase().includes('combat'))) {
+                      newSuggestions.push({
+                        id: `ability-${unit.id}-${rule.name}`,
+                        text: `⚔️ ${unitName}: ${rule.name}`,
+                        detail: rule.description || 'Capacité de combat',
+                        type: 'ability',
+                        phase: 'fight',
+                        unit: unitName
+                      });
+                    }
+                  });
+                }
+              }
+              
+              // Récursion dans les sous-sélections
+              if (selection.selections) {
+                findPhaseAbilities(selection.selections, unitName);
+              }
+            });
+          };
+          
+          // Chercher dans les règles directes de l'unité
+          if (unit.rules) {
+            unit.rules.forEach((rule: any) => {
+              // Capacités liées à la phase de commandement
+              if (currentPhase === 'command' && rule.name && 
+                  (rule.name.includes('Command') || rule.name.includes('Leader') || 
+                   rule.name === 'Appraising Glare' || rule.name === 'Grim Demeanour')) {
+                newSuggestions.push({
+                  id: `ability-${unit.id}-${rule.name}`,
+                  text: `✨ ${unit.name}: ${rule.name}`,
+                  detail: rule.description || 'Capacité de commandement',
+                  type: 'ability',
+                  phase: 'command',
+                  unit: unit.name
+                });
+              }
+            });
+          }
+          
+          findPhaseAbilities(unit.selections, unit.name);
+        }
       });
     }
 
-    if (currentPhase === 'morale') {
+    // Message si aucune capacité spécifique trouvée
+    if (newSuggestions.length === 0) {
       newSuggestions.push({
-        id: 'morale-phase',
-        text: '😰 Phase de moral',
-        detail: 'Effectuez les tests de Battle-shock pour les unités Below Half-strength',
+        id: 'no-phase-abilities',
+        text: `📋 Phase ${phases.find(p => p.id === currentPhase)?.name}`,
+        detail: 'Aucune capacité spécifique trouvée pour cette phase. Sélectionnez une unité pour voir ses capacités.',
         type: 'phase',
-        phase: 'morale'
-      });
-      newSuggestions.push({
-        id: 'morale-battleshock',
-        text: '💀 Tests de Battle-shock',
-        detail: 'Lancez 2D6 ≤ Leadership pour les unités affaiblies',
-        type: 'phase',
-        phase: 'morale'
+        phase: currentPhase
       });
     }
 
