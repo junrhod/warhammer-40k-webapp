@@ -20,7 +20,7 @@ const Warhammer40kAssistant = () => {
     { id: 'shooting', name: 'Tir', icon: Zap, color: 'bg-red-500' },
     { id: 'charge', name: 'Charge', icon: Sword, color: 'bg-orange-500' },
     { id: 'fight', name: 'Combat', icon: Shield, color: 'bg-purple-500' },
-    { id: 'morale', name: 'Moral', icon: AlertCircle, color: 'bg-gray-500' }
+    { id: 'endofturn', name: 'End of Turn', icon: AlertCircle, color: 'bg-gray-500' }
   ];
 
   // Base de données des stratagèmes Leagues of Votann
@@ -28,8 +28,8 @@ const Warhammer40kAssistant = () => {
     {
       name: "Newfound Nemesis",
       cost: 1,
-      phase: "any",
-      timing: "When unit reduced Below Half-strength",
+      phase: "fight", // Peut être utilisé pendant la Fight phase après attaque ennemie
+      timing: "After an enemy unit has resolved its attacks (Fight phase or opponent's Shooting phase)",
       description: "The attacking unit gains 1 Judgement token, or up to 2 Judgement tokens instead if that LEAGUES OF VOTANN unit contained your WARLORD when it was targeted by those attacks.",
       keywords: ["LEAGUES OF VOTANN"],
       unitTypes: ["any"],
@@ -75,16 +75,7 @@ const Warhammer40kAssistant = () => {
       unitTypes: ["any"],
       frequency: "once_per_turn"
     },
-    {
-      name: "Seismic Shock",
-      cost: 1,
-      phase: "shooting",
-      timing: "When shooting with blast weapons",
-      description: "Use this Stratagem when a LEAGUES OF VOTANN unit from your army shoots with a weapon that has the [BLAST] ability. Until the end of the phase, improve the Armour Penetration characteristic of that weapon by 1.",
-      keywords: ["LEAGUES OF VOTANN", "BLAST"],
-      unitTypes: ["any"],
-      frequency: "once_per_turn"
-    },
+
     {
       name: "Ancestral Sentence",
       cost: 1,
@@ -95,17 +86,383 @@ const Warhammer40kAssistant = () => {
       unitTypes: ["any"],
       frequency: "once_per_turn"
     },
-    {
-      name: "Grudge-hunters",
-      cost: 1,
-      phase: "charge",
-      timing: "When declaring a charge",
-      description: "Use this Stratagem when a LEAGUES OF VOTANN unit from your army declares a charge. If any of the targets of that charge have one or more Judgement tokens, you can re-roll the charge roll.",
-      keywords: ["LEAGUES OF VOTANN"],
-      unitTypes: ["any"],
-      frequency: "once_per_turn"
-    }
+
   ];
+
+  // Base de données complète des capacités et leurs phases correctes
+  const ABILITY_PHASE_MAPPING: { [key: string]: { phases: string[], description?: string, timing?: string } } = {
+    // EINHYR CHAMPION
+    "Exemplar of the Einhyr": {
+      phases: ['charge'],
+      timing: "While leading a unit",
+      description: "Re-roll Charge rolls made for that unit"
+    },
+    "Mass Driver Accelerators": {
+      phases: ['charge'],
+      timing: "Each time this model ends a Charge move",
+      description: "Select one enemy unit in Engagement Range and roll D6 for mortal wounds"
+    },
+    
+    // CTHONIAN BESERKS
+    "Cyberstimms": {
+      phases: ['fight'],
+      timing: "Each time a model is destroyed by a melee attack",
+      description: "If model has not fought this phase, roll D6: on 4+, it can fight after attacking unit finishes"
+    },
+    "Subterranean Explosives": {
+      phases: ['shooting'],
+      timing: "In your Shooting phase, after this unit has shot",
+      description: "Select enemy unit hit by mole grenade launchers, roll D6: on 4+ that unit is shaken"
+    },
+    
+    // EINHYR HEARTHGUARD
+    "Oathband Bodyguard": {
+      phases: [], // Capacité défensive pure - sera gérée par la logique automatique
+      timing: "Each time an attack targets this unit (Defensive)",
+      description: "While a CHARACTER is leading this unit: Subtract 1 from Wound rolls if attack Strength > unit Toughness"
+    },
+    "Teleport crest": {
+      phases: ['deployment'], // Capacité de déploiement
+      timing: "Deployment",
+      description: "Models in bearer's unit have Deep Strike ability"
+    },
+    "Deep Strike": {
+      phases: ['deployment', 'movement'],
+      timing: "Declare Battle Formations step (deployment) or Reinforcements step of YOUR Movement phase",
+      description: "During the Declare Battle Formations step, if every model in a unit has this ability, you can set it up in Reserves instead of setting it up on the battlefield. If you do, in the Reinforcements step of one of your Movement phases you can set up this unit anywhere on the battlefield that is more than 9\" horizontally away from all enemy models. If a unit with the Deep Strike ability arrives from Strategic Reserves, the controlling player can choose for that unit to be set up either using the rules for Strategic Reserves or using the Deep Strike ability."
+    },
+    
+    // HERNKYN YAEGIRS - Capacité qui se déclenche pendant la phase de mouvement adverse
+    "Pragmatic Hunters": {
+      phases: ['movement'], // Affichée en Movement phase mais seulement pendant le tour adverse
+      timing: "Once per turn, when enemy unit ends Normal/Advance/Fall Back move within 9\"",
+      description: "If not in Engagement Range, can make Normal move up to D6\""
+    },
+    
+    // HERNKYN PIONEERS - Capacité qui se déclenche pendant le tour adverse
+    "Outflanking Mag-Riders": {
+      phases: ['endofturn'], // Affichée en End of Turn mais seulement pendant le tour adverse
+      timing: "At the end of your opponent's turn",
+      description: "If within 6\" of battlefield edge and not in Engagement Range, can go into Strategic Reserves"
+    },
+    "Pan spectral scanner": {
+      phases: ['shooting'],
+      timing: "Passive",
+      description: "Ranged weapons equipped by models in bearer's unit have [IGNORES COVER]"
+    },
+    "Pan-spectral scanner": {
+      phases: ['shooting'],
+      timing: "Passive", 
+      description: "Ranged weapons equipped by models in bearer's unit have [IGNORES COVER]"
+    },
+    "Rollbar searchlight": {
+      phases: ['shooting', 'fight'],
+      timing: "When targeting units with Stealth",
+      description: "Add 1 to Hit roll when targeting units with Stealth ability"
+    },
+    
+    // HEKATON LAND FORTRESS
+    "Fire Support": {
+      phases: ['shooting'],
+      timing: "In your Shooting phase, after this model has shot",
+      description: "Friendly models that disembarked this turn can re-roll Wound rolls vs hit target"
+    },
+
+    
+    // SAGITAUR
+    "Blistering Advance": {
+      phases: ['movement'],
+      timing: "After this TRANSPORT has Advanced",
+      description: "Units can disembark and count as having made Normal move (cannot charge)"
+    },
+    
+    // EQUIPEMENTS ET CRESTS
+    "Weavefield crest": {
+      phases: [], // Sauvegarde passive - pas besoin d'affichage spécifique
+      timing: "Passive invulnerable save",
+      description: "Bearer has 4+ invulnerable save"
+    },
+    
+    // ENHANCEMENTS
+    "Appraising Glare": {
+      phases: ['command'],
+      timing: "In your Command phase",
+      description: "Select one objective marker your opponent controls - enemy units in range count as having +1 Judgement token"
+    },
+    "Grim Demeanour": {
+      phases: ['command'], // Les tests de Battle-shock se font en Command phase
+      timing: "Battle-shock tests (Command phase)",
+      description: "Can re-roll Battle-shock tests and ignore modifiers to Characteristics (except saves)"
+    },
+    "Ancestral Sentence": {
+      phases: ['shooting'],
+      timing: "Shooting phase enhancement",
+      description: "1CP stratagem enhancement for shooting attacks"
+    }
+  };
+
+    // Fonction intelligente pour déterminer si une capacité est pertinente pour la phase
+  const isAbilityRelevantForPhase = (abilityName: string, abilityDescription: string, currentPhase: string, currentActivePlayer: string = activePlayer): boolean => {
+
+    // FILTRE ABSOLU : Teleport crest ne doit JAMAIS s'afficher (capacité purement passive)
+    if (abilityName === 'Teleport crest') {
+      return false;
+    }
+    
+    // PREMIÈRE ÉTAPE : Vérifier universellement si c'est une capacité du tour adverse
+    // Cette logique s'applique à TOUTES les capacités, qu'elles soient dans notre base de données ou pas
+    const lowerDesc = abilityDescription.toLowerCase();
+    const lowerName = abilityName.toLowerCase();
+    
+    // Détection des capacités du tour adverse (offensives adverses)
+    const isOpponentTurnAbility = lowerDesc.includes('opponent\'s turn') || 
+                                 lowerDesc.includes('end of your opponent\'s turn') ||
+                                 lowerDesc.includes('during your opponent\'s turn') ||
+                                 lowerDesc.includes('at the end of your opponent\'s turn') ||
+                                 lowerDesc.includes('when an enemy unit') ||
+                                 lowerDesc.includes('when enemy unit') ||
+                                 lowerDesc.includes('once per turn, when an enemy') ||
+                                 lowerDesc.includes('once per turn, when enemy') ||
+                                 lowerDesc.includes('opponent\'s shooting phase') ||
+                                 lowerDesc.includes('opponent\'s movement phase') ||
+                                 lowerDesc.includes('opponent\'s charge phase') ||
+                                 lowerDesc.includes('opponent\'s fight phase');
+    
+    // Détection STRICTE des capacités défensives (se déclenchent quand on est attaqué)
+    const isDefensiveAbility = (lowerDesc.includes('when this unit is targeted') ||
+                               lowerDesc.includes('when an attack targets this unit') ||
+                               lowerDesc.includes('each time an attack targets this unit') ||
+                               lowerDesc.includes('subtract from wound roll') ||
+                               lowerDesc.includes('subtract 1 from the wound roll') ||
+                               lowerName.includes('bodyguard')) &&
+                               // EXCLURE les capacités offensives mal détectées
+                               !lowerDesc.includes('in your shooting phase') &&
+                               !lowerDesc.includes('ranged weapons equipped by') &&
+                               !lowerDesc.includes('when this unit attacks') &&
+                               !lowerDesc.includes('when this model attacks') &&
+                               !lowerDesc.includes('add 1 to the hit roll') &&
+                               !lowerDesc.includes('ignores cover');
+    
+    // Détection intelligente des aptitudes
+    
+    // LOGIQUE SPÉCIALE POUR LES CAPACITÉS DÉFENSIVES
+    if (isDefensiveAbility) {
+      // Les capacités défensives s'affichent quand l'unité peut être attaquée
+      if (currentActivePlayer === 'opponent') {
+        // Pendant le tour adverse : shooting et fight phases
+        if (currentPhase === 'shooting' || currentPhase === 'fight') {
+          return true;
+        }
+      } else {
+        // Pendant notre tour : seulement fight phase (riposte adverse)
+        if (currentPhase === 'fight') {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // Détection des capacités du tour adverse
+    if (isOpponentTurnAbility) {
+      // Si c'est une capacité du tour adverse, l'afficher seulement quand c'est le tour adverse
+      if (currentActivePlayer !== 'opponent') {
+        return false; // Ne JAMAIS afficher pendant notre tour
+      }
+      
+      // C'est le tour adverse, déterminer dans quelle phase l'afficher
+      if (lowerDesc.includes('end of your opponent\'s turn') || 
+          lowerDesc.includes('at the end of your opponent\'s turn')) {
+        return currentPhase === 'endofturn';
+      }
+      if (lowerDesc.includes('opponent\'s shooting phase')) {
+        return currentPhase === 'shooting';
+      }
+      if (lowerDesc.includes('opponent\'s movement phase') || 
+          lowerDesc.includes('when enemy unit ends') ||
+          lowerDesc.includes('when an enemy unit ends')) {
+        return currentPhase === 'movement';
+      }
+      if (lowerDesc.includes('opponent\'s charge phase')) {
+        return currentPhase === 'charge';
+      }
+      if (lowerDesc.includes('opponent\'s fight phase')) {
+        return currentPhase === 'fight';
+      }
+      // Par défaut pour les capacités du tour adverse qui ne spécifient pas la phase
+      if (lowerDesc.includes('move') || lowerDesc.includes('movement')) {
+        return currentPhase === 'movement';
+      }
+      // Sinon, End of Turn par défaut
+      return currentPhase === 'endofturn';
+    }
+    
+    // DEUXIÈME ÉTAPE : Vérifier dans notre base de données pour les capacités de notre tour
+    const mapping = ABILITY_PHASE_MAPPING[abilityName];
+    if (mapping) {
+      // Les capacités de déploiement s'affichent en phase de commandement
+      if (mapping.phases.includes('deployment')) {
+        return currentPhase === 'command';
+      }
+      
+      // Vérification spéciale pour les capacités du tour adverse dans la base de données
+      // Même si elles sont dans la base de données, elles doivent respecter la logique des tours
+      if (mapping.timing && (
+        mapping.timing.toLowerCase().includes('opponent\'s turn') ||
+        mapping.timing.toLowerCase().includes('end of your opponent\'s turn') ||
+        mapping.timing.toLowerCase().includes('at the end of your opponent\'s turn')
+      )) {
+        // Cette capacité est du tour adverse selon notre base de données
+        if (currentActivePlayer !== 'opponent') {
+          return false; // Ne pas afficher pendant notre tour
+        }
+        // Afficher seulement pendant le tour adverse dans la bonne phase
+        return mapping.phases.includes(currentPhase);
+      }
+      
+      // VÉRIFICATION CRITIQUE : Les capacités offensives (notre tour) ne doivent PAS s'afficher pendant le tour adverse
+      if (currentActivePlayer === 'opponent') {
+        // Pendant le tour adverse, ne pas afficher les capacités offensives
+        const lowerTiming = mapping.timing ? mapping.timing.toLowerCase() : '';
+        const lowerAbilityDesc = abilityDescription.toLowerCase();
+        
+        const isOffensiveAbility = lowerTiming.includes('in your shooting phase') ||
+          lowerTiming.includes('when this unit attacks') ||
+          lowerTiming.includes('when this model attacks') ||
+          lowerTiming.includes('passive') ||
+          lowerTiming.includes('ranged weapons equipped by') ||
+          lowerTiming.includes('when targeting') ||
+          lowerTiming.includes('when shooting') ||
+          lowerAbilityDesc.includes('ranged weapons equipped by') ||
+          lowerAbilityDesc.includes('ignores cover') ||
+          lowerAbilityDesc.includes('add 1 to the hit roll') ||
+          lowerAbilityDesc.includes('add 1 to hit roll') ||
+          lowerAbilityDesc.includes('re-roll wound roll') ||
+          lowerAbilityDesc.includes('improve the armour penetration') ||
+          lowerAbilityDesc.includes('after this model has shot') ||
+          lowerAbilityDesc.includes('after this unit has shot') ||
+          lowerName.includes('scanner') ||
+          lowerName.includes('searchlight') ||
+          lowerName.includes('sight') ||
+          lowerName.includes('scope');
+        
+        if (isOffensiveAbility) {
+          return false; // Ne JAMAIS afficher les capacités offensives pendant le tour adverse
+        }
+      }
+      
+      return mapping.phases.includes(currentPhase);
+    }
+    
+    // VÉRIFICATION FINALE : Même si pas dans la base de données, vérifier si c'est offensif pendant le tour adverse
+    if (currentActivePlayer === 'opponent') {
+      const isGlobalOffensiveAbility = lowerDesc.includes('ranged weapons equipped by') ||
+        lowerDesc.includes('ignores cover') ||
+        lowerDesc.includes('add 1 to the hit roll') ||
+        lowerDesc.includes('add 1 to hit roll') ||
+        lowerDesc.includes('re-roll wound roll') ||
+        lowerDesc.includes('improve the armour penetration') ||
+        lowerDesc.includes('after this model has shot') ||
+        lowerDesc.includes('after this unit has shot') ||
+        lowerDesc.includes('in your shooting phase') ||
+        lowerDesc.includes('when this unit attacks') ||
+        lowerDesc.includes('when this model attacks') ||
+        lowerName.includes('scanner') ||
+        lowerName.includes('searchlight') ||
+        lowerName.includes('sight') ||
+        lowerName.includes('scope');
+      
+      if (isGlobalOffensiveAbility) {
+        return false; // Ne JAMAIS afficher les capacités offensives pendant le tour adverse
+      }
+    }
+    
+
+
+    // Si pas dans la base de données, analyser la description avec une logique améliorée
+    // MAIS SEULEMENT SI C'EST NOTRE TOUR ! Pendant le tour adverse, ne montrer QUE les capacités défensives ou du tour adverse
+    if (currentActivePlayer === 'opponent') {
+      // Pendant le tour adverse, ne rien afficher par défaut (sauf défensives déjà gérées ci-dessus)
+      return false;
+    }
+    
+    switch (currentPhase) {
+      case 'command':
+        return lowerDesc.includes('command phase') || 
+               lowerDesc.includes('your command phase') ||
+               lowerDesc.includes('start of') ||
+               lowerDesc.includes('end of') ||
+               lowerDesc.includes('beginning of') ||
+               lowerDesc.includes('cp') ||
+               lowerDesc.includes('command point');
+               
+      case 'movement':
+        return lowerDesc.includes('move') || 
+               lowerDesc.includes('advance') || 
+               lowerDesc.includes('fall back') ||
+               lowerDesc.includes('movement phase') ||
+               lowerDesc.includes('scout') ||
+               lowerDesc.includes('infiltrator') ||
+               lowerDesc.includes('outflank') ||
+               lowerDesc.includes('redeploy') ||
+               lowerName.includes('speed') ||
+               lowerName.includes('swift');
+               
+      case 'shooting':
+        return lowerDesc.includes('shoot') || 
+               lowerDesc.includes('shooting phase') ||
+               lowerDesc.includes('ranged attack') ||
+               lowerDesc.includes('ranged weapon') ||
+               lowerDesc.includes('hit roll') || 
+               lowerDesc.includes('ballistic skill') ||
+               lowerDesc.includes('bs') ||
+               lowerDesc.includes('ignores cover') ||
+               lowerDesc.includes('precision') ||
+               lowerDesc.includes('indirect fire') ||
+               lowerDesc.includes('blast') ||
+               lowerName.includes('sight') ||
+               lowerName.includes('scope') ||
+               lowerName.includes('scanner');
+               
+      case 'charge':
+        return lowerDesc.includes('charge') || 
+               lowerDesc.includes('charging') ||
+               lowerDesc.includes('charge roll') ||
+               lowerDesc.includes('charge move') ||
+               lowerDesc.includes('declare a charge') ||
+               lowerDesc.includes('ends a charge') ||
+               lowerDesc.includes('when this model ends a charge move') ||
+               lowerDesc.includes('charge phase') ||
+               lowerName.includes('accelerator') ||
+               lowerName.includes('momentum');
+               
+      case 'fight':
+        return lowerDesc.includes('fight') || 
+               lowerDesc.includes('combat') || 
+               lowerDesc.includes('melee') ||
+               lowerDesc.includes('fight phase') ||
+               lowerDesc.includes('melee attack') ||
+               lowerDesc.includes('weapon skill') ||
+               lowerDesc.includes('ws') ||
+               lowerDesc.includes('close combat') ||
+               lowerDesc.includes('engagement range') ||
+               lowerDesc.includes('fights first') ||
+               lowerDesc.includes('fights last') ||
+               lowerDesc.includes('destroyed by a melee attack') ||
+               lowerName.includes('combat') ||
+               lowerName.includes('duelist') ||
+               lowerName.includes('fighter');
+               
+      case 'endofturn':
+        return lowerDesc.includes('end of turn') || 
+               lowerDesc.includes('end of the turn') ||
+               lowerDesc.includes('at the end of') ||
+               lowerDesc.includes('during the end phase') ||
+               lowerName.includes('end');
+               
+      default:
+        return true; // Afficher toutes les capacités si phase inconnue
+    }
+  };
 
   const parseArmyData = (jsonData: any) => {
     try {
@@ -570,12 +927,55 @@ const Warhammer40kAssistant = () => {
   };
 
   // Fonction pour obtenir les stratagèmes applicables à une unité
-  const getApplicableStratagems = (unit: any, phase: string, _activePlayer: string) => {
+  const getApplicableStratagems = (unit: any, phase: string, currentActivePlayer: string) => {
     if (!unit) return [];
     
     return LEAGUES_STRATAGEMS.filter(stratagem => {
-      // Filtrer par phase (permettre "any" ou phase exacte)
+      // Filtrer par phase - mais pour les stratagèmes "any", vérifier le timing
       if (stratagem.phase !== phase && stratagem.phase !== "any") return false;
+      
+      // Filtrer les stratagèmes réactifs qui ne s'activent pas dans les phases normales
+      if (stratagem.phase === "reactive") {
+        // Les stratagèmes réactifs ne s'affichent pas dans les suggestions de phase normale
+        return false;
+      }
+      
+      // GESTION DES STRATAGEMES DEFENSIFS vs OFFENSIFS
+      // VOID ARMOUR - Peut être utilisé quand vos unités sont ciblées
+      if (stratagem.name === "Void Armour") {
+        if (currentActivePlayer === 'opponent') {
+          // Tour adverse : shooting et fight phases (quand l'ennemi attaque)
+          return phase === "shooting" || phase === "fight";
+        } else {
+          // Votre tour : seulement fight phase (quand l'ennemi riposte)
+          return phase === "fight";
+        }
+      }
+      
+      // REACTIVE REPRISAL - Seulement pendant Enemy Shooting phase
+      if (stratagem.name === "Reactive Reprisal") {
+        if (currentActivePlayer === 'opponent' && phase === "shooting") {
+          return true;
+        }
+        return false;
+      }
+      
+      // Pour les stratagèmes avec phase "any" (non défensifs)
+      if (stratagem.phase === "any") {
+        // "Void Armour" déjà géré ci-dessus
+        if (stratagem.name === "Void Armour") {
+          return false; // Déjà traité dans la section défensive
+        }
+      }
+      
+      // STRATAGEMES OFFENSIFS - seulement pendant VOTRE tour
+      const offensiveStratagems = ["Ancestral Sentence", "Ordered Retreat"];
+      if (offensiveStratagems.includes(stratagem.name)) {
+        if (currentActivePlayer === 'opponent') {
+          console.log(`🚫 STRATAGÈME OFFENSIF "${stratagem.name}" bloqué pendant le tour adverse`);
+          return false; // Ne pas afficher pendant le tour adverse
+        }
+      }
       
       // Vérifier si le stratagème s'applique au type d'unité
       if (stratagem.unitTypes.includes("any")) return true;
@@ -592,170 +992,515 @@ const Warhammer40kAssistant = () => {
     });
   };
 
+  // Fonction pour détecter les unités qui doivent faire des tests de Battle-shock
+  const getBattleShockUnits = () => {
+    if (!armyData) return [];
+    
+    const battleShockUnits: any[] = [];
+    
+    armyData.units?.forEach((unit: any) => {
+      const maxWounds = unit.totalWounds || parseInt(unit.stats?.W) || 1;
+      const currentWounds = unitHealth[unit.id] !== undefined ? unitHealth[unit.id] : maxWounds;
+      const halfWounds = Math.ceil(maxWounds / 2);
+      
+      // Unité Below Half-strength et encore vivante
+      if (currentWounds > 0 && currentWounds < halfWounds) {
+        const leadership = unit.stats?.LD || '7+';
+        battleShockUnits.push({
+          name: unit.name,
+          currentWounds: currentWounds,
+          totalWounds: maxWounds,
+          leadership: leadership,
+          id: unit.id
+        });
+      }
+    });
+    
+    return battleShockUnits;
+  };
+
   // Fonction pour générer les suggestions intelligentes
+  // Fonction pour explorer la structure complète et trouver les enhancements
+  const exploreArmyStructure = () => {
+    if (!armyData) return;
+    
+    console.log('=== STRUCTURE COMPLETE DE L\'ARMEE ===');
+    console.log('Army Data:', armyData);
+    
+    armyData.units?.forEach((unit: any, unitIndex: number) => {
+      console.log(`\n--- UNITE ${unitIndex}: ${unit.name} ---`);
+      console.log('Unit rules:', unit.rules);
+      console.log('Unit selections:', unit.selections);
+      
+      // Explorer récursivement toutes les sélections
+      const exploreSelections = (selections: any[], level = 0) => {
+        if (!selections) return;
+        
+        selections.forEach((selection: any, index: number) => {
+          const indent = '  '.repeat(level);
+          console.log(`${indent}Selection ${index}: ${selection.name} (type: ${selection.type})`);
+          
+          if (selection.rules) {
+            console.log(`${indent}  Rules:`, selection.rules.map((r: any) => r.name));
+          }
+          
+          if (selection.selections) {
+            exploreSelections(selection.selections, level + 1);
+          }
+        });
+      };
+      
+      exploreSelections(unit.selections);
+    });
+  };
+
   const generateSuggestions = () => {
     const newSuggestions: any[] = [];
+    const seenAbilities = new Set<string>(); // Pour éviter les doublons
+    
+    // Tests de Battle-shock à effectuer en Command phase
+    if (currentPhase === 'command') {
+      const battleShockUnits = getBattleShockUnits();
+      if (battleShockUnits.length > 0) {
+        newSuggestions.push({
+          id: 'battle-shock-tests',
+          text: `⚠️ Tests de Battle-shock requis pour ${battleShockUnits.length} unité(s)`,
+          detail: `Unités Below Half-strength qui doivent faire un test de Battle-shock :\n\n${battleShockUnits.map(unit => 
+            `• ${unit.name}: ${unit.currentWounds}/${unit.totalWounds} W restantes (LD ${unit.leadership})`
+          ).join('\n')}\n\n📋 Règle: Lancez 2D6. Si le résultat ≥ Leadership, l'unité est Battle-shocked.`,
+          type: 'battle-shock',
+          phase: 'command',
+          timing: 'Début de Command phase'
+        });
+      }
+    }
 
-    // Suggestions d'habilités de toutes les unités pertinentes pour la phase actuelle
+    
+
+
+    // Afficher les capacités selon la sélection d'unité
     if (armyData && armyData.units) {
       armyData.units.forEach((unit: any) => {
         const currentWounds = unitHealth[unit.id] || 0;
         if (currentWounds > 0) { // Unité encore vivante
           
-          // Chercher les capacités liées à la phase actuelle
-          const findPhaseAbilities = (selections: any[], unitName: string) => {
+          // Si une unité est sélectionnée, afficher seulement les capacités de cette unité
+          // Si aucune unité sélectionnée, afficher toutes les capacités
+          if (selectedUnit && selectedUnit !== unit.id) {
+            return; // Skip cette unité si une autre est sélectionnée
+          }
+          
+          // Ajouter les habilités de l'unité (exclure les règles d'armée/faction)
+          if (unit.rules && unit.rules.length > 0) {
+            unit.rules.forEach((rule: any) => {
+              // Filtrer les règles d'armée/faction et règles communes
+              const armyRules = [
+                'Ruthless Efficiency', 'Eye of the Ancestors', 'Oath of Moment',
+                'Combat Doctrines', 'Angels of Death', 'And They Shall Know No Fear',
+                'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
+                'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save', 'Deep Strike',
+                'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
+                'Conversion', 'Damaged:'
+              ];
+              
+              // Ignorer si c'est une règle d'armée
+              if (armyRules.some(armyRule => rule.name?.includes(armyRule))) {
+                return;
+              }
+              
+                              // Vérifier si la règle est pertinente pour la phase actuelle
+                const ruleDescription = rule.description || 'Capacité spéciale de l\'unité';
+                if (isAbilityRelevantForPhase(rule.name, ruleDescription, currentPhase, activePlayer)) {
+                  // Éviter les doublons - utiliser le nom de la capacité comme clé unique
+                  const abilityKey = rule.name;
+                  if (!seenAbilities.has(abilityKey)) {
+                    seenAbilities.add(abilityKey);
+                    
+                    // Utiliser les informations de notre base de données si disponible
+                    const abilityMapping = ABILITY_PHASE_MAPPING[rule.name];
+                    let displayDescription = ruleDescription;
+                    let timing = '';
+                    
+                    if (abilityMapping) {
+                      if (abilityMapping.timing) {
+                        timing = `📅 ${abilityMapping.timing} | `;
+                      }
+                      if (abilityMapping.description) {
+                        displayDescription = `${timing}${abilityMapping.description}\n\n📜 Description complète: ${ruleDescription}`;
+                      } else {
+                        displayDescription = `${timing}${ruleDescription}`;
+                      }
+                    }
+                    
+                    newSuggestions.push({
+                      id: `ability-${unit.id}-${rule.name}`,
+                      text: `✨ ${unit.name}: ${rule.name}`,
+                      detail: displayDescription,
+                      type: 'ability',
+                      phase: currentPhase,
+                      unit: unit.name,
+                      timing: abilityMapping?.timing || 'Phase active'
+                    });
+                  }
+                }
+            });
+          }
+
+          // Ajouter les capacités trouvées dans les profiles de l'unité (comme "Exemplar of the Einhyr")
+          if (unit.profiles && unit.profiles.length > 0) {
+            unit.profiles.forEach((profile: any) => {
+              if (profile.typeName === 'Abilities' && profile.name && profile.characteristics) {
+                const description = profile.characteristics.find((char: any) => char.name === 'Description')?.$text;
+                if (description) {
+                  // Filtrer les règles d'armée/faction et règles communes
+                  const armyRules = [
+                    'Ruthless Efficiency', 'Eye of the Ancestors', 'Oath of Moment',
+                    'Combat Doctrines', 'Angels of Death', 'And They Shall Know No Fear',
+                    'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
+                    'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save', 'Deep Strike',
+                    'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
+                    'Conversion', 'Damaged:'
+                  ];
+                  
+                  // Ignorer si c'est une règle d'armée
+                  if (armyRules.some(armyRule => profile.name?.includes(armyRule))) {
+                    return;
+                  }
+                  
+                  // Vérifier si la capacité est pertinente pour la phase actuelle
+                  if (isAbilityRelevantForPhase(profile.name, description, currentPhase, activePlayer)) {
+                    // Éviter les doublons - utiliser le nom de la capacité comme clé unique
+                    const abilityKey = profile.name;
+                    if (!seenAbilities.has(abilityKey)) {
+                      seenAbilities.add(abilityKey);
+                      
+                      // Utiliser les informations de notre base de données si disponible
+                      const abilityMapping = ABILITY_PHASE_MAPPING[profile.name];
+                      let displayDescription = description;
+                      let timing = '';
+                      
+                      if (abilityMapping) {
+                        if (abilityMapping.timing) {
+                          timing = `📅 ${abilityMapping.timing} | `;
+                        }
+                        if (abilityMapping.description) {
+                          displayDescription = `${timing}${abilityMapping.description}\n\n📜 Description complète: ${description}`;
+                        } else {
+                          displayDescription = `${timing}${description}`;
+                        }
+                      }
+                      
+                      newSuggestions.push({
+                        id: `ability-${unit.id}-${profile.name}`,
+                        text: `✨ ${unit.name}: ${profile.name}`,
+                        detail: displayDescription,
+                        type: 'ability',
+                        phase: currentPhase,
+                        unit: unit.name,
+                        timing: abilityMapping?.timing || 'Phase active'
+                      });
+                    }
+                  }
+                }
+              }
+            });
+          }
+
+          // Détecter les aptitudes dérivées (équipements qui confèrent des aptitudes)
+          const detectDerivedAbilities = () => {
+            // Fonction récursive pour chercher dans toutes les sélections
+            const searchForTeleportCrest = (selections: any[]): boolean => {
+              if (!selections) return false;
+              
+              return selections.some((sel: any) => {
+                // Vérifier le nom de la sélection
+                if (sel.name === 'Teleport crest') {
+                  return true;
+                }
+                
+                // Vérifier dans les profiles
+                if (sel.profiles?.some((p: any) => p.name === 'Teleport crest')) {
+                  return true;
+                }
+                
+                // Chercher récursivement dans les sous-sélections
+                if (sel.selections) {
+                  return searchForTeleportCrest(sel.selections);
+                }
+                
+                return false;
+              });
+            };
+            
+            // Chercher "Teleport crest" qui confère "Deep Strike"
+            const hasTeleportCrest = searchForTeleportCrest(unit.selections || []);
+            
+            // Deep Strike s'affiche seulement en déploiement OU pendant VOTRE phase de mouvement (pas celle de l'adversaire)
+            const canShowDeepStrike = (currentPhase === 'deployment') || 
+                                    (currentPhase === 'movement' && activePlayer === 'player');
+            
+
+            
+            if (hasTeleportCrest && canShowDeepStrike) {
+              const abilityKey = 'Deep Strike';
+              if (!seenAbilities.has(abilityKey)) {
+                seenAbilities.add(abilityKey);
+                
+                const abilityMapping = ABILITY_PHASE_MAPPING['Deep Strike'];
+                let displayDescription = 'Deep Strike capability granted by Teleport crest';
+                let timing = '';
+                
+                if (abilityMapping) {
+                  if (abilityMapping.timing) {
+                    timing = `📅 ${abilityMapping.timing} | `;
+                  }
+                  displayDescription = `${timing}${abilityMapping.description}\n\n🎒 Granted by: Teleport crest`;
+                }
+                
+                newSuggestions.push({
+                  id: `ability-${unit.id}-deep-strike`,
+                  text: `✨ ${unit.name}: Deep Strike`,
+                  detail: displayDescription,
+                  type: 'ability',
+                  phase: currentPhase,
+                  unit: unit.name,
+                  timing: abilityMapping?.timing || 'Deployment/Reinforcements'
+                });
+              }
+            }
+          };
+          
+          // Appeler la détection des aptitudes dérivées
+          detectDerivedAbilities();
+
+          // Chercher les habilités dans les sélections de l'unité (exclure les règles d'armes)
+          const findAbilities = (selections: any[]) => {
             if (!selections) return;
             
             selections.forEach((selection: any) => {
-              // Capacités spécifiques à la phase de commandement
-              if (currentPhase === 'command') {
-                if (selection.name === 'Appraising Glare') {
-                  newSuggestions.push({
-                    id: `ability-${unit.id}-appraising-glare`,
-                    text: `✨ ${unitName}: Appraising Glare`,
-                    detail: 'Sélectionnez un objectif ennemi - les unités à proximité comptent +1 Judgement token (max 2)',
-                    type: 'ability',
-                    phase: 'command',
-                    unit: unitName
-                  });
-                }
-                if (selection.name === 'Grim Demeanour') {
-                  newSuggestions.push({
-                    id: `ability-${unit.id}-grim-demeanour`,
-                    text: `✨ ${unitName}: Grim Demeanour`,
-                    detail: 'Peut re-roll les tests Battle-shock et ignorer les modificateurs (sauf sauvegardes)',
-                    type: 'ability',
-                    phase: 'command',
-                    unit: unitName
-                  });
-                }
+              
+              // Ignorer les armes et leurs règles
+              if (selection.profiles?.some((p: any) => p.typeName === 'Weapon')) {
+                return; // Skip les armes
               }
               
-              // Capacités spécifiques à la phase de tir
-              if (currentPhase === 'shooting') {
-                if (selection.name && selection.name.toLowerCase().includes('weapon') || 
-                    selection.profiles?.some((p: any) => p.typeName === 'Weapon')) {
-                  newSuggestions.push({
-                    id: `ability-${unit.id}-${selection.name}`,
-                    text: `🔫 ${unitName}: ${selection.name}`,
-                    detail: 'Arme disponible pour le tir',
-                    type: 'ability',
-                    phase: 'shooting',
-                    unit: unitName
-                  });
+              // Traitement spécial pour les upgrades/enhancements comme "Appraising Glare"
+              if (selection.type === 'upgrade') {
+                // Vérifier d'abord le nom de la sélection
+                let enhancementName = selection.name;
+                
+                // Si pas trouvé, chercher dans les profiles de la sélection
+                if (!enhancementName || !['Appraising Glare', 'Grim Demeanour', 'Ancestral Sentence'].includes(enhancementName)) {
+                  // Chercher "Appraising Glare" dans les profiles
+                  const profile = selection.profiles?.find((p: any) => 
+                    p.typeName === 'Abilities' && p.name === 'Appraising Glare'
+                  );
+                  if (profile) {
+                    enhancementName = profile.name;
+                  }
                 }
-              }
-              
-              // Capacités spécifiques au combat
-              if (currentPhase === 'fight') {
-                if (selection.rules) {
-                  selection.rules.forEach((rule: any) => {
-                    if (rule.name && (rule.name.toLowerCase().includes('melee') || 
-                        rule.name.toLowerCase().includes('fight') ||
-                        rule.name.toLowerCase().includes('combat'))) {
+                
+                if (enhancementName) {
+                  // Définir les enhancements et leurs phases
+                  const enhancementPhases: { [key: string]: { phases: string[], description: string, requiresChampion?: boolean } } = {
+                    'Appraising Glare': {
+                      phases: ['command'],
+                      description: 'Command phase: Select one enemy unit visible to bearer - that unit gains 1 Judgement token (max 2)',
+                      requiresChampion: true
+                    },
+                    'Grim Demeanour': {
+                      phases: ['morale'],
+                      description: 'Can re-roll Battle-shock tests and ignore modifiers to Characteristics (except saves)'
+                    },
+                    'Ancestral Sentence': {
+                      phases: ['shooting'],
+                      description: 'Shooting phase: 1CP stratagem enhancement'
+                    }
+                  };
+                  
+                  const enhancement = enhancementPhases[enhancementName];
+                  if (enhancement && enhancement.phases.includes(currentPhase)) {
+                    // Les enhancements sont des capacités OFFENSIVES qui ne s'utilisent que pendant NOTRE tour
+                    if (activePlayer === 'opponent') {
+                      return; // Ne JAMAIS afficher les enhancements pendant le tour adverse
+                    }
+                    // Vérifier si l'enhancement nécessite un champion
+                    if (enhancement.requiresChampion) {
+                      // Vérifier si l'unité est un champion (contient "Champion" dans le nom ou les catégories)
+                      const isChampion = unit.name.toLowerCase().includes('champion') || 
+                                       unit.categories?.some((cat: any) => cat.name.toLowerCase().includes('champion'));
+                      
+                      if (!isChampion) {
+                        return; // Ne pas afficher pour les non-champions
+                      }
+                    }
+                    
+                    // Éviter les doublons pour les enhancements aussi
+                    const abilityKey = enhancementName;
+                    if (!seenAbilities.has(abilityKey)) {
+                      seenAbilities.add(abilityKey);
+                      
+                      // Utiliser la description du profile si disponible, sinon celle par défaut
+                      let description = enhancement.description;
+                      const profile = selection.profiles?.find((p: any) => 
+                        p.typeName === 'Abilities' && p.name === enhancementName
+                      );
+                      if (profile && profile.characteristics) {
+                        const descChar = profile.characteristics.find((c: any) => c.name === 'Description');
+                        if (descChar && descChar.$text) {
+                          description = descChar.$text;
+                        }
+                      }
+                      
                       newSuggestions.push({
-                        id: `ability-${unit.id}-${rule.name}`,
-                        text: `⚔️ ${unitName}: ${rule.name}`,
-                        detail: rule.description || 'Capacité de combat',
+                        id: `ability-${unit.id}-${enhancementName}`,
+                        text: `✨ ${unit.name}: ${enhancementName}`,
+                        detail: description,
                         type: 'ability',
-                        phase: 'fight',
-                        unit: unitName
+                        phase: currentPhase,
+                        unit: unit.name
                       });
                     }
-                  });
+                  }
                 }
               }
               
-              // Récursion dans les sous-sélections
+              if (selection.rules) {
+                selection.rules.forEach((rule: any) => {
+                  const abilityName = rule.name || 'Capacité';
+                  
+                  // Filtrer les règles d'armes communes et règles génériques
+                  const weaponRules = [
+                    'Sustained Hits', 'Lethal Hits', 'Anti-', 'Devastating Wounds',
+                    'Blast', 'Hazardous', 'Heavy', 'Indirect', 'Ignores Cover',
+                    'One Shot', 'Pistol', 'Precision', 'Rapid Fire', 'Torrent',
+                    'Twin-linked', 'Assault', 'Melta', 'Lance', 'Psychic',
+                    'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save',
+                    'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
+                    'Conversion', 'Damaged:'
+                  ];
+                  
+                  // Ignorer si c'est une règle d'arme
+                  if (weaponRules.some(weaponRule => abilityName.includes(weaponRule))) {
+                    return;
+                  }
+                  
+                  const description = rule.description || 'Capacité spéciale';
+                  
+                  // Vérifier si la capacité est pertinente pour la phase actuelle
+                  if (isAbilityRelevantForPhase(abilityName, description, currentPhase, activePlayer)) {
+                    // Éviter les doublons - utiliser le nom de la capacité comme clé unique
+                    const abilityKey = abilityName;
+                    if (!seenAbilities.has(abilityKey)) {
+                      seenAbilities.add(abilityKey);
+                      
+                      // Utiliser les informations de notre base de données si disponible
+                      const abilityMapping = ABILITY_PHASE_MAPPING[abilityName];
+                      let displayDescription = description;
+                      let timing = '';
+                      
+                      if (abilityMapping) {
+                        if (abilityMapping.timing) {
+                          timing = `📅 ${abilityMapping.timing} | `;
+                        }
+                        if (abilityMapping.description) {
+                          displayDescription = `${timing}${abilityMapping.description}\n\n📜 Description complète: ${description}`;
+                        } else {
+                          displayDescription = `${timing}${description}`;
+                        }
+                      }
+                      
+                      newSuggestions.push({
+                        id: `ability-${unit.id}-${selection.name}-${abilityName}`,
+                        text: `✨ ${unit.name}: ${abilityName}`,
+                        detail: displayDescription,
+                        type: 'ability',
+                        phase: currentPhase,
+                        unit: unit.name,
+                        timing: abilityMapping?.timing || 'Phase active'
+                      });
+                    }
+                  }
+                });
+              }
+              
+              // Traitement des profiles de type "Abilities" qui ne sont pas des enhancements
+              if (selection.profiles) {
+                selection.profiles.forEach((profile: any) => {
+                  if (profile.typeName === 'Abilities' && profile.name && profile.characteristics) {
+                    const description = profile.characteristics.find((char: any) => char.name === 'Description')?.$text;
+                    if (description) {
+                      // Filtrer les règles d'armée/faction et règles communes
+                      const armyRules = [
+                        'Ruthless Efficiency', 'Eye of the Ancestors', 'Oath of Moment',
+                        'Combat Doctrines', 'Angels of Death', 'And They Shall Know No Fear',
+                        'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
+                        'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save',
+                        'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
+                        'Conversion', 'Damaged:'
+                      ];
+                      
+                      // Ignorer si c'est une règle d'armée
+                      if (armyRules.some(armyRule => profile.name?.includes(armyRule))) {
+                        return;
+                      }
+                      
+                      // Vérifier si la capacité est pertinente pour la phase actuelle
+                      if (isAbilityRelevantForPhase(profile.name, description, currentPhase, activePlayer)) {
+                        // Éviter les doublons - utiliser le nom de la capacité comme clé unique
+                        const abilityKey = profile.name;
+                        if (!seenAbilities.has(abilityKey)) {
+                          seenAbilities.add(abilityKey);
+                          
+                          // Utiliser les informations de notre base de données si disponible
+                          const abilityMapping = ABILITY_PHASE_MAPPING[profile.name];
+                          let displayDescription = description;
+                          let timing = '';
+                          
+                          if (abilityMapping) {
+                            if (abilityMapping.timing) {
+                              timing = `📅 ${abilityMapping.timing} | `;
+                            }
+                            if (abilityMapping.description) {
+                              displayDescription = `${timing}${abilityMapping.description}\n\n📜 Description complète: ${description}`;
+                            } else {
+                              displayDescription = `${timing}${description}`;
+                            }
+                          }
+                          
+                          newSuggestions.push({
+                            id: `ability-${unit.id}-${selection.name}-${profile.name}`,
+                            text: `✨ ${unit.name}: ${profile.name}`,
+                            detail: displayDescription,
+                            type: 'ability',
+                            phase: currentPhase,
+                            unit: unit.name,
+                            timing: abilityMapping?.timing || 'Phase active'
+                          });
+                        }
+                      }
+                    }
+                  }
+                });
+              }
+              
               if (selection.selections) {
-                findPhaseAbilities(selection.selections, unitName);
+                findAbilities(selection.selections);
               }
             });
           };
           
-          // Chercher dans les règles directes de l'unité
-          if (unit.rules) {
-            unit.rules.forEach((rule: any) => {
-              // Capacités liées à la phase de commandement
-              if (currentPhase === 'command' && rule.name && 
-                  (rule.name.includes('Command') || rule.name.includes('Leader') || 
-                   rule.name === 'Appraising Glare' || rule.name === 'Grim Demeanour')) {
-                newSuggestions.push({
-                  id: `ability-${unit.id}-${rule.name}`,
-                  text: `✨ ${unit.name}: ${rule.name}`,
-                  detail: rule.description || 'Capacité de commandement',
-                  type: 'ability',
-                  phase: 'command',
-                  unit: unit.name
-                });
-              }
-            });
-          }
-          
-          findPhaseAbilities(unit.selections, unit.name);
+          findAbilities(unit.selections);
         }
       });
     }
 
-    // Message si aucune capacité spécifique trouvée
-    if (newSuggestions.length === 0) {
-      newSuggestions.push({
-        id: 'no-phase-abilities',
-        text: `📋 Phase ${phases.find(p => p.id === currentPhase)?.name}`,
-        detail: 'Aucune capacité spécifique trouvée pour cette phase. Sélectionnez une unité pour voir ses capacités.',
-        type: 'phase',
-        phase: currentPhase
-      });
-    }
+    // Ne plus générer de message ici - ce sera fait après le filtrage global
 
-    // Suggestions d'habilités pour l'unité sélectionnée
+    // Suggestions de stratagèmes pour l'unité sélectionnée (SEULEMENT si unité sélectionnée)
     if (selectedUnit && armyData) {
       const unit = armyData.units.find((u: any) => u.id === selectedUnit);
       if (unit) {
-        // Ajouter les habilités de l'unité
-        if (unit.rules && unit.rules.length > 0) {
-          unit.rules.forEach((rule: any) => {
-            newSuggestions.push({
-              id: `ability-${unit.id}-${rule.name}`,
-              text: `✨ ${unit.name}: ${rule.name}`,
-              detail: rule.description || 'Capacité spéciale de l\'unité',
-              type: 'ability',
-              phase: currentPhase,
-              unit: unit.name
-            });
-          });
-        }
-
-        // Chercher les habilités dans les sélections de l'unité
-        const findAbilities = (selections: any[]) => {
-          if (!selections) return;
-          
-          selections.forEach((selection: any) => {
-            if (selection.rules) {
-              selection.rules.forEach((rule: any) => {
-                const abilityName = rule.name || 'Capacité';
-                const description = rule.description || 'Capacité spéciale';
-                
-                newSuggestions.push({
-                  id: `ability-${unit.id}-${selection.name}-${abilityName}`,
-                  text: `✨ ${unit.name}: ${abilityName}`,
-                  detail: description,
-                  type: 'ability',
-                  phase: currentPhase,
-                  unit: unit.name
-                });
-              });
-            }
-            
-            if (selection.selections) {
-              findAbilities(selection.selections);
-            }
-          });
-        };
-        
-        findAbilities(unit.selections);
-
-        // Suggestions de stratagèmes pour l'unité sélectionnée (SEULEMENT si unité sélectionnée)
         const applicableStratagems = getApplicableStratagems(unit, currentPhase, activePlayer);
         
         applicableStratagems.forEach(stratagem => {
@@ -783,7 +1528,50 @@ const Warhammer40kAssistant = () => {
   };
 
   useEffect(() => {
-    setSuggestions(generateSuggestions());
+    const allSuggestions = generateSuggestions();
+    
+    // 🛡️ FILTRE GLOBAL FINAL - Nettoyer toutes les capacités qui ne devraient pas être là pendant le tour adverse
+    const filteredSuggestions = allSuggestions.filter(suggestion => {
+      if (activePlayer === 'opponent' && suggestion.type === 'ability') {
+        const fullText = suggestion.text.toLowerCase();
+        
+        // Liste noire des capacités qui ne doivent JAMAIS s'afficher pendant le tour adverse
+        const blockedAbilities = [
+          'teleport crest', 'blistering advance', 'exemplar of the einhyr', 
+          'mass driver accelerators', 'appraising glare', 'deep strike'
+        ];
+        
+        // Vérifier si le texte contient une des capacités bloquées
+        const isBlocked = blockedAbilities.some(blocked => fullText.includes(blocked));
+        
+        if (isBlocked) {
+          return false;
+        }
+      }
+      return true;
+    });
+    
+    // 🌐 LOGIQUE GLOBALE UNIFIÉE - Générer un message cohérent si aucune suggestion finale
+    let finalSuggestions = filteredSuggestions;
+    
+    if (finalSuggestions.length === 0 || finalSuggestions.every(s => s.type === 'phase')) {
+      const currentPhaseName = phases.find(p => p.id === currentPhase)?.name;
+      const playerText = activePlayer === 'player' ? 'Votre' : 'Tour Adverse';
+      
+      const message = selectedUnit 
+        ? 'Aucune capacité d\'unité trouvée.'
+        : 'Sélectionnez une unité pour voir les suggestions';
+      
+      finalSuggestions = [{
+        id: 'no-abilities',
+        text: `📋 ${playerText} - Phase ${currentPhaseName}`,
+        detail: message,
+        type: 'phase',
+        phase: currentPhase
+      }];
+    }
+    
+    setSuggestions(finalSuggestions);
   }, [currentPhase, selectedUnit, armyData, commandPoints, activePlayer]);
 
   const nextPhase = () => {
@@ -1403,6 +2191,7 @@ const Warhammer40kAssistant = () => {
                       suggestion.type === 'info' ? 'text-cyan-400' :
                       suggestion.type === 'help' ? 'text-orange-400' :
                       suggestion.type === 'stratagem' ? 'text-pink-400' :
+                      suggestion.type === 'battle-shock' ? 'text-red-400' :
                       'text-gray-400'
                     }`}>
                       {suggestion.text}
@@ -1411,7 +2200,7 @@ const Warhammer40kAssistant = () => {
                       <div className="text-xs text-gray-300">{suggestion.detail?.substring(0, 80)}...</div>
                     )}
                   </div>
-                  {(suggestion.type === 'ability' || suggestion.type === 'stratagem') && (
+                  {(suggestion.type === 'ability' || suggestion.type === 'stratagem' || suggestion.type === 'battle-shock') && (
                     <button 
                       onClick={() => setExpandedRules(prev => ({
                         ...prev,
@@ -1419,16 +2208,21 @@ const Warhammer40kAssistant = () => {
                       }))}
                       className={`transition-colors ml-2 ${
                         suggestion.type === 'ability' ? 'text-gray-400 hover:text-green-400' :
-                        'text-gray-400 hover:text-pink-400'
+                        suggestion.type === 'stratagem' ? 'text-gray-400 hover:text-pink-400' :
+                        suggestion.type === 'battle-shock' ? 'text-gray-400 hover:text-red-400' :
+                        'text-gray-400 hover:text-orange-400'
                       }`}
                     >
                       {expandedRules[`suggestion-${index}`] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </button>
                   )}
                 </div>
-                {expandedRules[`suggestion-${index}`] && (suggestion.type === 'ability' || suggestion.type === 'stratagem') && (
+                {expandedRules[`suggestion-${index}`] && (suggestion.type === 'ability' || suggestion.type === 'stratagem' || suggestion.type === 'battle-shock') && (
                   <div className={`mt-2 p-2 rounded text-xs text-gray-200 leading-relaxed ${
-                    suggestion.type === 'ability' ? 'bg-gray-800' : 'bg-pink-900 border border-pink-600'
+                    suggestion.type === 'ability' ? 'bg-gray-800' :
+                    suggestion.type === 'stratagem' ? 'bg-pink-900 border border-pink-600' :
+                    suggestion.type === 'battle-shock' ? 'bg-red-900 border border-red-600' :
+                    'bg-gray-800'
                   }`}>
                     {suggestion.detail}
                     {suggestion.type === 'stratagem' && (
@@ -1443,12 +2237,7 @@ const Warhammer40kAssistant = () => {
               </div>
             ))}
             
-            {suggestions.length === 0 && (
-              <div className="text-center text-gray-500 py-8">
-                <AlertCircle className="mx-auto h-8 w-8 mb-2" />
-                <p>Sélectionnez une unité pour voir les suggestions</p>
-              </div>
-            )}
+            {/* Message géré maintenant par la logique globale unifiée */}
           </div>
         </div>
       </div>
