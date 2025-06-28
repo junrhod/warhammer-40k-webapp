@@ -570,7 +570,7 @@ const Warhammer40kAssistant = () => {
   };
 
   // Fonction pour obtenir les stratagèmes applicables à une unité
-  const getApplicableStratagems = (unit: any, phase: string, activePlayer: string) => {
+  const getApplicableStratagems = (unit: any, phase: string, _activePlayer: string) => {
     if (!unit) return [];
     
     return LEAGUES_STRATAGEMS.filter(stratagem => {
@@ -1258,10 +1258,10 @@ const Warhammer40kAssistant = () => {
                 }
               };
               
-              // Affichage des PV (revient au format original)
-              const getHealthDisplay = () => {
-                return `${currentWounds}/${maxWounds} PV`;
-              };
+                             // Affichage des PV (revient au format original)
+               // const getHealthDisplay = () => {
+               //   return `${currentWounds}/${maxWounds} PV`;
+               // };
               
               return (
                 <div
