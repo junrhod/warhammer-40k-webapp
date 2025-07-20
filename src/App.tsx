@@ -11,7 +11,11 @@ const Warhammer40kAssistant = () => {
   const [unitHealth, setUnitHealth] = useState<Record<string, number>>({});
   const [commandPoints, setCommandPoints] = useState(0);
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [expandedRules, setExpandedRules] = useState<Record<string, boolean>>({});
+  const [expandedRules, setExpandedRules] = useState<Record<string, boolean>>({
+    loadout: false,
+    ranged: true,
+    melee: true
+  });
   const [resolvedRules, setResolvedRules] = useState<Record<string, boolean>>({});
   const [selectedOath, setSelectedOath] = useState<string | null>(null); // 'Lay Low The Tyrant' | 'Reclaim the Realm'
 
@@ -1142,6 +1146,33 @@ const Warhammer40kAssistant = () => {
     reader.readAsText(file);
   };
 
+  const loadPresetArmy = async (armyName: string) => {
+    try {
+      const response = await fetch(`/${armyName}.json`);
+      const content = await response.text();
+      const parsed = parseArmyData(content);
+      if (parsed) {
+        setArmyData(parsed);
+        
+        setUnitHealth(prevHealth => {
+          const healthState: Record<string, number> = { ...prevHealth };
+          parsed.units.forEach((unit: any) => {
+            const totalWounds = unit.totalWounds || parseInt(unit.stats?.W) || 1;
+            if (!(unit.id in healthState)) {
+              healthState[unit.id] = totalWounds;
+            }
+          });
+          return healthState;
+        });
+        
+        setCommandPoints(1);
+        setGameState('first-player');
+      }
+    } catch (error) {
+      alert(`Erreur lors du chargement de ${armyName}`);
+    }
+  };
+
   const startGame = (firstPlayer: string) => {
     setActivePlayer(firstPlayer);
     setGameState('deployment');
@@ -1442,6 +1473,62 @@ const Warhammer40kAssistant = () => {
         return unitKeywords.includes("faction: leagues of votann");
       }
     });
+  };
+
+  // Fonction pour extraire les armes d'une unité
+  const getUnitWeapons = (unit: any) => {
+    if (!unit || !unit.selections) return { ranged: [], melee: [] };
+    
+    const rangedWeapons: any[] = [];
+    const meleeWeapons: any[] = [];
+    
+    const extractWeapons = (selections: any[]) => {
+      selections.forEach((selection: any) => {
+        // Vérifier si c'est une arme
+        if (selection.profiles) {
+          selection.profiles.forEach((profile: any) => {
+            if (profile.typeName === 'Ranged Weapons') {
+              const quantity = selection.number || 1;
+              const weaponName = quantity > 1 ? `${profile.name} (x${quantity})` : profile.name;
+              
+              rangedWeapons.push({
+                name: weaponName,
+                range: profile.characteristics?.find((c: any) => c.name === 'Range')?.$text || '-',
+                attacks: profile.characteristics?.find((c: any) => c.name === 'A')?.$text || '-',
+                ballisticSkill: profile.characteristics?.find((c: any) => c.name === 'BS')?.$text || '-',
+                strength: profile.characteristics?.find((c: any) => c.name === 'S')?.$text || '-',
+                armourPenetration: profile.characteristics?.find((c: any) => c.name === 'AP')?.$text || '-',
+                damage: profile.characteristics?.find((c: any) => c.name === 'D')?.$text || '-',
+                keywords: profile.characteristics?.find((c: any) => c.name === 'Keywords')?.$text || '-'
+              });
+            } else if (profile.typeName === 'Melee Weapons') {
+              const quantity = selection.number || 1;
+              const weaponName = quantity > 1 ? `${profile.name} (x${quantity})` : profile.name;
+              
+              meleeWeapons.push({
+                name: weaponName,
+                range: profile.characteristics?.find((c: any) => c.name === 'Range')?.$text || '-',
+                attacks: profile.characteristics?.find((c: any) => c.name === 'A')?.$text || '-',
+                weaponSkill: profile.characteristics?.find((c: any) => c.name === 'WS')?.$text || '-',
+                strength: profile.characteristics?.find((c: any) => c.name === 'S')?.$text || '-',
+                armourPenetration: profile.characteristics?.find((c: any) => c.name === 'AP')?.$text || '-',
+                damage: profile.characteristics?.find((c: any) => c.name === 'D')?.$text || '-',
+                keywords: profile.characteristics?.find((c: any) => c.name === 'Keywords')?.$text || '-'
+              });
+            }
+          });
+        }
+        
+        // Récursion pour les sélections imbriquées
+        if (selection.selections) {
+          extractWeapons(selection.selections);
+        }
+      });
+    };
+    
+    extractWeapons(unit.selections);
+    
+    return { ranged: rangedWeapons, melee: meleeWeapons };
   };
 
   // Fonction pour détecter les unités qui doivent faire des tests de Battle-shock
@@ -1972,7 +2059,7 @@ const Warhammer40kAssistant = () => {
                     'Twin-linked', 'Assault', 'Melta', 'Lance', 'Psychic',
                     'Leader', 'Leaders', 'Feel No Pain',
                     'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
-                    'Conversion', 'Damaged:', 'Code Chivalric', 'Protection Protocols'
+                    'Conversion', 'Damaged:', 'Code Chivalric'
                   ];
                   
                   // Ignorer si c'est une règle d'arme
@@ -2032,7 +2119,7 @@ const Warhammer40kAssistant = () => {
                         'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
                         'Leader', 'Leaders', 'Feel No Pain',
                         'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
-                        'Conversion', 'Damaged:', 'Code Chivalric', 'Protection Protocols'
+                        'Conversion', 'Damaged:', 'Code Chivalric'
                       ];
                       
                       // Ignorer si c'est une règle d'armée
@@ -2567,6 +2654,36 @@ const Warhammer40kAssistant = () => {
           </div>
         </div>
 
+        {/* Armées prédéfinies */}
+        <div className="mt-8 bg-gray-800 rounded-lg p-6">
+          <h3 className="text-xl font-semibold mb-4 text-center">Ou choisir une armée prédéfinie</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <button 
+              onClick={() => loadPresetArmy('Knights')}
+              className="bg-blue-600 hover:bg-blue-700 p-4 rounded-lg transition-colors text-center"
+            >
+              <div className="text-lg font-semibold mb-2">⚔️ Imperial Knights</div>
+              <div className="text-sm text-gray-300">1000 pts - Knight Valiant + Armigers</div>
+            </button>
+            
+            <button 
+              onClick={() => loadPresetArmy('Paquhammer')}
+              className="bg-green-600 hover:bg-green-700 p-4 rounded-lg transition-colors text-center"
+            >
+              <div className="text-lg font-semibold mb-2">🔨 Leagues of Votann</div>
+              <div className="text-sm text-gray-300">Liste personnalisée</div>
+            </button>
+            
+            <button 
+              onClick={() => loadPresetArmy('Paquhammer Hekathon')}
+              className="bg-purple-600 hover:bg-purple-700 p-4 rounded-lg transition-colors text-center"
+            >
+              <div className="text-lg font-semibold mb-2">🏰 Hekaton Land Fortress</div>
+              <div className="text-sm text-gray-300">Liste avec véhicule principal</div>
+            </button>
+          </div>
+        </div>
+
         <div className="mt-8 text-center text-gray-400">
           <p className="mb-2">Format supporté : JSON de NewRecruit.eu</p>
           <p className="text-sm">L'assistant vous guidera phase par phase pendant votre partie</p>
@@ -2677,10 +2794,172 @@ const Warhammer40kAssistant = () => {
       <div className="bg-gray-800 rounded-lg p-4 mb-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-red-500">{armyData?.name}</h1>
-          <div className="flex items-center space-x-4">
-            <span className="text-yellow-500">{armyData?.totalPoints} pts</span>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-300">CP:</span>
+            <button onClick={() => setCommandPoints(Math.max(0, commandPoints - 1))} className="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-sm">-1</button>
+            <span className="text-lg font-bold mx-2 text-blue-400">{commandPoints}</span>
+            <button onClick={() => setCommandPoints(commandPoints + 1)} className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-sm">+1</button>
+          </div>
+          <span className="text-yellow-500">{armyData?.totalPoints} pts</span>
+        </div>
+      </div>
+
+      {/* Section Loadout - Toujours visible */}
+      <div className={`rounded-lg transition-colors ${
+        selectedUnit && expandedRules.loadout ? 'bg-gray-800 p-4 mb-6' : 
+        selectedUnit ? 'bg-gray-800 p-4 mb-4' : 'bg-gray-800 opacity-50 p-4 mb-4'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            {selectedUnit && expandedRules.loadout && (() => {
+              const selectedUnitData = armyData?.units?.find((u: any) => u.id === selectedUnit);
+              const weapons = getUnitWeapons(selectedUnitData);
+              return weapons.ranged.length > 0 ? (
+                <button 
+                  onClick={() => setExpandedRules(prev => ({ ...prev, ranged: !prev.ranged }))}
+                  className="flex items-center text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                >
+                  <h4 className="text-sm font-semibold text-blue-400">Ranged Weapons</h4>
+                  <span className="text-gray-400 hover:text-blue-400 transition-colors ml-2">
+                    {expandedRules.ranged ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </span>
+                </button>
+              ) : null;
+            })()}
+          </div>
+          <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => setExpandedRules(prev => ({ ...prev, loadout: !prev.loadout }))}
+              disabled={!selectedUnit}
+              className={`flex items-center space-x-2 transition-colors ${
+                selectedUnit 
+                  ? 'text-white hover:text-gray-300 cursor-pointer' 
+                  : 'text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <h3 className={`text-lg font-semibold ${
+                selectedUnit ? 'text-white' : 'text-gray-400'
+              }`}>
+                Loadout
+              </h3>
+              {selectedUnit && (
+                <span className="text-sm text-gray-300">
+                  {armyData?.units?.find((u: any) => u.id === selectedUnit)?.name}
+                </span>
+              )}
+              {!selectedUnit && (
+                <span className="text-sm font-normal text-gray-500">(sélectionnez une unité)</span>
+              )}
+              <span className={`transition-colors ${
+                selectedUnit 
+                  ? 'text-gray-400 hover:text-white' 
+                  : 'text-gray-600'
+              }`}>
+                {expandedRules.loadout ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+              </span>
+            </button>
           </div>
         </div>
+        
+        {selectedUnit && expandedRules.loadout && (
+          <div>
+            {(() => {
+              const selectedUnitData = armyData?.units?.find((u: any) => u.id === selectedUnit);
+              const weapons = getUnitWeapons(selectedUnitData);
+              
+              return (
+                <>
+                  {/* Armes à distance */}
+                  {weapons.ranged.length > 0 && expandedRules.ranged && (
+                    <div className="overflow-x-auto mb-2">
+                      <table className="w-full text-xs table-fixed">
+                        <thead>
+                          <tr className="border-b border-gray-600">
+                            <th className="text-left p-1 w-1/4">Weapon</th>
+                            <th className="text-left p-1 w-16">Range</th>
+                            <th className="text-left p-1 w-8">A</th>
+                            <th className="text-left p-1 w-8">BS</th>
+                            <th className="text-left p-1 w-8">S</th>
+                            <th className="text-left p-1 w-8">AP</th>
+                            <th className="text-left p-1 w-8">D</th>
+                            <th className="text-left p-1">Keywords</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {weapons.ranged.map((weapon: any, index: number) => (
+                            <tr key={index} className="border-b border-gray-700">
+                              <td className="p-1 font-semibold">{weapon.name}</td>
+                              <td className="p-1">{weapon.range}</td>
+                              <td className="p-1">{weapon.attacks}</td>
+                              <td className="p-1">{weapon.ballisticSkill}</td>
+                              <td className="p-1">{weapon.strength}</td>
+                              <td className="p-1">{weapon.armourPenetration}</td>
+                              <td className="p-1">{weapon.damage}</td>
+                              <td className="p-1 text-gray-300">{weapon.keywords}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Armes de mêlée */}
+                  {weapons.melee.length > 0 && (
+                    <div>
+                      <button 
+                        onClick={() => setExpandedRules(prev => ({ ...prev, melee: !prev.melee }))}
+                        className="flex items-center mb-1 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                      >
+                        <h4 className="text-sm font-semibold text-red-400">Melee Weapons</h4>
+                        <span className="text-gray-400 hover:text-red-400 transition-colors ml-2">
+                          {expandedRules.melee ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </span>
+                      </button>
+                      {expandedRules.melee && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs table-fixed">
+                            <thead>
+                              <tr className="border-b border-gray-600">
+                                <th className="text-left p-1 w-1/4">Weapon</th>
+                                <th className="text-left p-1 w-16">Range</th>
+                                <th className="text-left p-1 w-8">A</th>
+                                <th className="text-left p-1 w-8">WS</th>
+                                <th className="text-left p-1 w-8">S</th>
+                                <th className="text-left p-1 w-8">AP</th>
+                                <th className="text-left p-1 w-8">D</th>
+                                <th className="text-left p-1">Keywords</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {weapons.melee.map((weapon: any, index: number) => (
+                                <tr key={index} className="border-b border-gray-700">
+                                  <td className="p-1 font-semibold">{weapon.name}</td>
+                                  <td className="p-1">{weapon.range}</td>
+                                  <td className="p-1">{weapon.attacks}</td>
+                                  <td className="p-1">{weapon.weaponSkill}</td>
+                                  <td className="p-1">{weapon.strength}</td>
+                                  <td className="p-1">{weapon.armourPenetration}</td>
+                                  <td className="p-1">{weapon.damage}</td>
+                                  <td className="p-1 text-gray-300">{weapon.keywords}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {weapons.ranged.length === 0 && weapons.melee.length === 0 && (
+                    <div className="text-gray-400 text-center py-2">
+                      Aucune arme trouvée pour cette unité
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2712,14 +2991,7 @@ const Warhammer40kAssistant = () => {
             </button>
           </div>
 
-          <div className="bg-gray-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold mb-3">Points de Commandement</h3>
-            <div className="flex items-center space-x-2">
-              <button onClick={() => setCommandPoints(Math.max(0, commandPoints - 1))} className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded">-1</button>
-              <span className="text-xl font-bold mx-4">{commandPoints}</span>
-              <button onClick={() => setCommandPoints(commandPoints + 1)} className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded">+1</button>
-            </div>
-          </div>
+
         </div>
 
         <div className="bg-gray-800 rounded-lg p-4">
@@ -2841,42 +3113,65 @@ const Warhammer40kAssistant = () => {
           <div className="space-y-3 h-96 overflow-y-auto">
             {suggestions.map((suggestion: any, index: number) => (
               <div key={index} className="bg-gray-700 rounded-lg p-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className={`text-sm font-semibold mb-1 ${
-                      suggestion.type === 'phase' ? 'text-blue-400' :
-                      suggestion.type === 'ability' ? 'text-green-400' :
-                      suggestion.type === 'equipment' ? 'text-yellow-400' :
-                      suggestion.type === 'detachment' ? 'text-purple-400' :
-                      suggestion.type === 'info' ? 'text-cyan-400' :
-                      suggestion.type === 'help' ? 'text-orange-400' :
-                      suggestion.type === 'stratagem' ? 'text-pink-400' :
-                      suggestion.type === 'battle-shock' ? 'text-red-400' :
-                      'text-gray-400'
-                    }`}>
-                      {suggestion.text}
-                    </div>
-                    {!expandedRules[`suggestion-${index}`] && (
-                      <div className="text-xs text-gray-300">{suggestion.detail?.substring(0, 80)}...</div>
-                    )}
-                  </div>
-                  {(suggestion.type === 'ability' || suggestion.type === 'stratagem' || suggestion.type === 'battle-shock') && (
-                    <button 
-                      onClick={() => setExpandedRules(prev => ({
-                        ...prev,
-                        [`suggestion-${index}`]: !prev[`suggestion-${index}`]
-                      }))}
-                      className={`transition-colors ml-2 ${
+                {(suggestion.type === 'ability' || suggestion.type === 'stratagem' || suggestion.type === 'battle-shock') ? (
+                  <button 
+                    onClick={() => setExpandedRules(prev => ({
+                      ...prev,
+                      [`suggestion-${index}`]: !prev[`suggestion-${index}`]
+                    }))}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className={`text-sm font-semibold mb-1 ${
+                          suggestion.type === 'phase' ? 'text-blue-400' :
+                          suggestion.type === 'ability' ? 'text-green-400' :
+                          suggestion.type === 'equipment' ? 'text-yellow-400' :
+                          suggestion.type === 'detachment' ? 'text-purple-400' :
+                          suggestion.type === 'info' ? 'text-cyan-400' :
+                          suggestion.type === 'help' ? 'text-orange-400' :
+                          suggestion.type === 'stratagem' ? 'text-pink-400' :
+                          suggestion.type === 'battle-shock' ? 'text-red-400' :
+                          'text-gray-400'
+                        }`}>
+                          {suggestion.text}
+                        </div>
+                        {!expandedRules[`suggestion-${index}`] && (
+                          <div className="text-xs text-gray-300">{suggestion.detail?.substring(0, 80)}...</div>
+                        )}
+                      </div>
+                      <span className={`transition-colors ml-2 ${
                         suggestion.type === 'ability' ? 'text-gray-400 hover:text-green-400' :
                         suggestion.type === 'stratagem' ? 'text-gray-400 hover:text-pink-400' :
                         suggestion.type === 'battle-shock' ? 'text-gray-400 hover:text-red-400' :
                         'text-gray-400 hover:text-orange-400'
-                      }`}
-                    >
-                      {expandedRules[`suggestion-${index}`] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
-                  )}
-                </div>
+                      }`}>
+                        {expandedRules[`suggestion-${index}`] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </span>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className={`text-sm font-semibold mb-1 ${
+                        suggestion.type === 'phase' ? 'text-blue-400' :
+                        suggestion.type === 'ability' ? 'text-green-400' :
+                        suggestion.type === 'equipment' ? 'text-yellow-400' :
+                        suggestion.type === 'detachment' ? 'text-purple-400' :
+                        suggestion.type === 'info' ? 'text-cyan-400' :
+                        suggestion.type === 'help' ? 'text-orange-400' :
+                        suggestion.type === 'stratagem' ? 'text-pink-400' :
+                        suggestion.type === 'battle-shock' ? 'text-red-400' :
+                        'text-gray-400'
+                      }`}>
+                        {suggestion.text}
+                      </div>
+                      {!expandedRules[`suggestion-${index}`] && (
+                        <div className="text-xs text-gray-300">{suggestion.detail?.substring(0, 80)}...</div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {expandedRules[`suggestion-${index}`] && (suggestion.type === 'ability' || suggestion.type === 'stratagem' || suggestion.type === 'battle-shock') && (
                   <div className={`mt-2 p-2 rounded text-xs text-gray-200 leading-relaxed ${
                     suggestion.type === 'ability' ? 'bg-gray-800' :
