@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Play, Users, Target, Zap, Shield, Sword, AlertCircle, CheckCircle, ChevronDown, ChevronRight, Move, Heart } from 'lucide-react';
+import { Upload, Play, Users, Target, Zap, Shield, Sword, AlertCircle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
 
 // Base de données des règles de keywords
 const KEYWORD_RULES = {
