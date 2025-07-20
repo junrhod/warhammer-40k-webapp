@@ -1,5 +1,64 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Play, Users, Target, Zap, Shield, Sword, AlertCircle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, Play, Users, Target, Zap, Shield, Sword, AlertCircle, CheckCircle, ChevronDown, ChevronRight, Move, Heart } from 'lucide-react';
+
+// Base de données des règles de keywords
+const KEYWORD_RULES = {
+  'Ignores Cover': {
+    name: 'Ignores Cover',
+    description: 'Les armes avec [IGNORES COVER] dans leur profil sont connues comme des armes Ignores Cover. Chaque fois qu\'une attaque est faite avec une telle arme, la cible ne peut pas avoir l\'Avantage de Couverture contre cette attaque.',
+    page: 25
+  },
+  'Torrent': {
+    name: 'Torrent',
+    description: 'Les armes avec [TORRENT] dans leur profil sont connues comme des armes Torrent. Chaque fois qu\'une attaque est faite avec une telle arme, cette attaque touche automatiquement la cible.',
+    page: 25
+  },
+  'Anti-Monster 4+': {
+    name: 'Anti-Monster 4+',
+    description: 'Les armes avec [ANTI-KEYWORD X+] dans leur profil sont connues comme des armes Anti. Chaque fois qu\'une attaque est faite avec une telle arme contre une cible avec le mot-clé après le mot "Anti-", un jet de Blessure non modifié de "x+" compte comme une Blessure Critique.',
+    page: 28
+  },
+  'Anti-Vehicle 4+': {
+    name: 'Anti-Vehicle 4+',
+    description: 'Les armes avec [ANTI-KEYWORD X+] dans leur profil sont connues comme des armes Anti. Chaque fois qu\'une attaque est faite avec une telle arme contre une cible avec le mot-clé après le mot "Anti-", un jet de Blessure non modifié de "x+" compte comme une Blessure Critique.',
+    page: 28
+  },
+  'Anti-Titanic 4+': {
+    name: 'Anti-Titanic 4+',
+    description: 'Les armes avec [ANTI-KEYWORD X+] dans leur profil sont connues comme des armes Anti. Chaque fois qu\'une attaque est faite avec une telle arme contre une cible avec le mot-clé après le mot "Anti-", un jet de Blessure non modifié de "x+" compte comme une Blessure Critique.',
+    page: 28
+  },
+  'Devastating Wounds': {
+    name: 'Devastating Wounds',
+    description: 'Les armes avec [DEVASTATING WOUNDS] dans leur profil sont connues comme des armes Devastating Wounds. Chaque fois qu\'une attaque est faite avec une telle arme, si cette attaque compte comme une Blessure Critique, aucun jet de sauvegarde de quelque nature que ce soit ne peut être fait contre cette attaque (y compris les sauvegardes d\'invulnérabilité).',
+    page: 28
+  },
+  'Melta 2': {
+    name: 'Melta 2',
+    description: 'Les armes avec [MELTA X] dans leur profil sont connues comme des armes Melta. Chaque fois qu\'une attaque faite avec une telle arme cible une unité à moins de la moitié de la portée de cette arme, la caractéristique de Dégâts de cette attaque est augmentée de la quantité dénotée par "x".',
+    page: 26
+  },
+  'Melta 4': {
+    name: 'Melta 4',
+    description: 'Les armes avec [MELTA X] dans leur profil sont connues comme des armes Melta. Chaque fois qu\'une attaque faite avec une telle arme cible une unité à moins de la moitié de la portée de cette arme, la caractéristique de Dégâts de cette attaque est augmentée de la quantité dénotée par "x".',
+    page: 26
+  },
+  'Twin-Linked': {
+    name: 'Twin-Linked',
+    description: 'Les armes avec [TWIN-LINKED] dans leur profil sont connues comme des armes Twin-linked. Chaque fois qu\'une attaque est faite avec une telle arme, vous pouvez relancer le jet de Blessure de cette attaque.',
+    page: 25
+  },
+  'Blast': {
+    name: 'Blast',
+    description: 'Les armes avec [BLAST] dans leur profil sont connues comme des armes Blast, et elles font un nombre aléatoire d\'attaques. Chaque fois que vous déterminez combien d\'attaques sont faites avec une arme Blast, ajoutez 1 au résultat pour chaque cinq modèles qui étaient dans l\'unité cible quand vous l\'avez sélectionnée comme cible (en arrondissant vers le bas).',
+    page: 26
+  },
+  'Rapid Fire 3': {
+    name: 'Rapid Fire 3',
+    description: 'Les armes avec [RAPID FIRE X] dans leur profil sont connues comme des armes Rapid Fire. Chaque fois qu\'une telle arme cible une unité à moins de la moitié de sa portée, la caractéristique d\'Attaques de cette arme est augmentée de la quantité dénotée par "x".',
+    page: 25
+  }
+};
 
 const Warhammer40kAssistant = () => {
   const [gameState, setGameState] = useState('setup');
@@ -18,6 +77,7 @@ const Warhammer40kAssistant = () => {
   });
   const [resolvedRules, setResolvedRules] = useState<Record<string, boolean>>({});
   const [selectedOath, setSelectedOath] = useState<string | null>(null); // 'Lay Low The Tyrant' | 'Reclaim the Realm'
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
 
   const phases = [
     { id: 'command', name: 'Commandement', icon: Users, color: 'bg-blue-500' },
@@ -2254,6 +2314,46 @@ const Warhammer40kAssistant = () => {
     }));
   };
 
+  // Fonction pour parser les keywords et les rendre cliquables
+  const parseKeywords = (keywordsString: string) => {
+    if (!keywordsString || keywordsString === '-') return [];
+    
+    // Séparer les keywords par virgule et nettoyer
+    return keywordsString.split(',').map(keyword => keyword.trim());
+  };
+
+  // Fonction pour rendre les keywords cliquables
+  const renderClickableKeywords = (keywordsString: string) => {
+    const keywords = parseKeywords(keywordsString);
+    
+    if (keywords.length === 0) return <span className="text-gray-500">-</span>;
+    
+    return (
+      <div className="flex flex-wrap gap-1">
+        {keywords.map((keyword, index) => {
+          const rule = KEYWORD_RULES[keyword as keyof typeof KEYWORD_RULES];
+          const isClickable = !!rule;
+          
+          return (
+            <span key={index}>
+              {isClickable ? (
+                <button
+                  onClick={() => setSelectedKeyword(selectedKeyword === keyword ? null : keyword)}
+                  className="text-blue-400 hover:text-blue-300 underline cursor-pointer text-xs"
+                >
+                  {keyword}
+                </button>
+              ) : (
+                <span className="text-gray-300 text-xs">{keyword}</span>
+              )}
+              {index < keywords.length - 1 && <span className="text-gray-500 text-xs">, </span>}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Phase de déploiement
   if (gameState === 'deployment') {
     const infiltratorsUnits = getInfiltratorsUnits();
@@ -2841,18 +2941,18 @@ const Warhammer40kAssistant = () => {
                   {weapons.ranged.length > 0 && expandedRules.ranged && (
                     <div className="overflow-x-auto mb-2">
                       <table className="w-full text-xs table-fixed">
-                        <thead>
-                          <tr className="border-b border-gray-600">
-                            <th className="text-left p-1 w-1/4">Weapon</th>
-                            <th className="text-left p-1 w-16">Range</th>
-                            <th className="text-left p-1 w-8">A</th>
-                            <th className="text-left p-1 w-8">BS</th>
-                            <th className="text-left p-1 w-8">S</th>
-                            <th className="text-left p-1 w-8">AP</th>
-                            <th className="text-left p-1 w-8">D</th>
-                            <th className="text-left p-1">Keywords</th>
-                          </tr>
-                        </thead>
+                                                    <thead>
+                              <tr className="border-b border-gray-600">
+                                <th className="text-left p-1 w-1/4">Weapon</th>
+                                <th className="text-left p-1 w-16">Range</th>
+                                <th className="text-left p-1 w-8">A</th>
+                                <th className="text-left p-1 w-8">BS</th>
+                                <th className="text-left p-1 w-8">S</th>
+                                <th className="text-left p-1 w-8">AP</th>
+                                <th className="text-left p-1 w-8">D</th>
+                                <th className="text-left p-1 pl-4">Keywords</th>
+                              </tr>
+                            </thead>
                         <tbody>
                           {weapons.ranged.map((weapon: any, index: number) => (
                             <tr key={index} className="border-b border-gray-700">
@@ -2863,7 +2963,7 @@ const Warhammer40kAssistant = () => {
                               <td className="p-1">{weapon.strength}</td>
                               <td className="p-1">{weapon.armourPenetration}</td>
                               <td className="p-1">{weapon.damage}</td>
-                              <td className="p-1 text-gray-300">{weapon.keywords}</td>
+                              <td className="p-1 pl-4">{renderClickableKeywords(weapon.keywords)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2895,7 +2995,7 @@ const Warhammer40kAssistant = () => {
                                 <th className="text-left p-1 w-8">S</th>
                                 <th className="text-left p-1 w-8">AP</th>
                                 <th className="text-left p-1 w-8">D</th>
-                                <th className="text-left p-1">Keywords</th>
+                                <th className="text-left p-1 pl-4">Keywords</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2908,7 +3008,7 @@ const Warhammer40kAssistant = () => {
                                   <td className="p-1">{weapon.strength}</td>
                                   <td className="p-1">{weapon.armourPenetration}</td>
                                   <td className="p-1">{weapon.damage}</td>
-                                  <td className="p-1 text-gray-300">{weapon.keywords}</td>
+                                  <td className="p-1 pl-4">{renderClickableKeywords(weapon.keywords)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2926,6 +3026,29 @@ const Warhammer40kAssistant = () => {
                 </>
               );
             })()}
+          </div>
+        )}
+
+        {/* Panneau de détails des règles */}
+        {selectedKeyword && (
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 mt-4">
+            <div className="flex justify-between items-start mb-3">
+              <h4 className="text-lg font-bold text-white">{selectedKeyword}</h4>
+              <button
+                onClick={() => setSelectedKeyword(null)}
+                className="text-gray-400 hover:text-gray-200 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="bg-gray-700 rounded p-3">
+              <p className="text-gray-200 text-sm leading-relaxed mb-2">
+                {KEYWORD_RULES[selectedKeyword as keyof typeof KEYWORD_RULES]?.description}
+              </p>
+              <p className="text-gray-400 text-xs">
+                Page {KEYWORD_RULES[selectedKeyword as keyof typeof KEYWORD_RULES]?.page} du Codex
+              </p>
+            </div>
           </div>
         )}
       </div>
