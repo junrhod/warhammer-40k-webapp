@@ -1559,39 +1559,7 @@ const Warhammer40kAssistant = () => {
   };
 
   // Fonction pour générer les suggestions intelligentes
-  // Fonction pour explorer la structure complète et trouver les enhancements
-  const exploreArmyStructure = () => {
-    if (!armyData) return;
-    
-    console.log('=== STRUCTURE COMPLETE DE L\'ARMEE ===');
-    console.log('Army Data:', armyData);
-    
-    armyData.units?.forEach((unit: any, unitIndex: number) => {
-      console.log(`\n--- UNITE ${unitIndex}: ${unit.name} ---`);
-      console.log('Unit rules:', unit.rules);
-      console.log('Unit selections:', unit.selections);
-      
-      // Explorer récursivement toutes les sélections
-      const exploreSelections = (selections: any[], level = 0) => {
-        if (!selections) return;
-        
-        selections.forEach((selection: any, index: number) => {
-          const indent = '  '.repeat(level);
-          console.log(`${indent}Selection ${index}: ${selection.name} (type: ${selection.type})`);
-          
-          if (selection.rules) {
-            console.log(`${indent}  Rules:`, selection.rules.map((r: any) => r.name));
-          }
-          
-          if (selection.selections) {
-            exploreSelections(selection.selections, level + 1);
-          }
-        });
-      };
-      
-      exploreSelections(unit.selections);
-    });
-  };
+
 
   const generateSuggestions = () => {
     const newSuggestions: any[] = [];
