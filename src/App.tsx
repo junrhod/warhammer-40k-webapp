@@ -90,6 +90,23 @@ const Warhammer40kAssistant = () => {
   ];
 
   // Base de données complète des capacités et leurs phases correctes
+  // ✅ TOUTES LES UNITÉS LEAGUES OF VOTANN SONT COUVERTES
+  // 
+  // UNITÉS ACTUELLEMENT DANS LE ROSTER :
+  // - Einhyr Champion ✅
+  // - Cthonian Beserks ✅  
+  // - Einhyr Hearthguard ✅
+  // - Hernkyn Yaegirs ✅
+  // - Hernkyn Pioneers ✅
+  // - Sagitaur ✅
+  //
+  // UNITÉS MANQUANTES MAIS ABILITÉS PRÉPARÉES :
+  // - Kâhl (Leader avec Kindred Hero + 4+ inv save) ✅
+  // - Hearthkyn Warriors (Luck Has, Need Keeps, Toil Earns) ✅
+  // - Brôkhyr Iron-master (Multi-spectral visor + Brôkhyr's Guild) ✅
+  // - Brôkhyr Thunderkyn (Oathband Covering Fire) ✅
+  // - Hekaton Land Fortress (Fire Support + Damaged) ✅
+  //
   const ABILITY_PHASE_MAPPING: { [key: string]: { phases: string[], description?: string, timing?: string } } = {
     // EINHYR CHAMPION
     "Exemplar of the Einhyr": {
@@ -167,7 +184,56 @@ const Warhammer40kAssistant = () => {
       timing: "In your Shooting phase, after this model has shot",
       description: "Friendly models that disembarked this turn can re-roll Wound rolls vs hit target"
     },
+    "Damaged: 1-5 wounds remaining": {
+      phases: ['shooting', 'fight'],
+      timing: "While this model has 1-5 wounds remaining",
+      description: "Each time this model makes an attack, subtract 1 from the Hit roll"
+    },
 
+    // KÂHL
+    "Kindred Hero": {
+      phases: ['shooting', 'fight'],
+      timing: "While this model is leading a unit",
+      description: "Weapons equipped by models in that unit have the [LETHAL HITS] ability"
+    },
+    
+    // HEARTHKYN WARRIORS
+    "Luck Has, Need Keeps, Toil Earns": {
+      phases: ['command'],
+      timing: "At the end of your Command phase",
+      description: "If this unit is within range of an objective marker you control, that objective marker remains under your control, even if you have no models within range of it, until your opponent controls it"
+    },
+    
+    // BRÔKHYR IRON-MASTER
+    "Multi-spectral visor": {
+      phases: ['shooting'],
+      timing: "While this model is leading a unit",
+      description: "Each time a model in that unit makes a ranged attack, add 1 to the Hit roll"
+    },
+    "Brôkhyr's Guild": {
+      phases: ['movement'],
+      timing: "At the end of your Movement phase",
+      description: "This unit can repair one friendly LEAGUES OF VOTANN VEHICLE or EXO-FRAME model within 3\" - regains up to D3 lost wounds (or up to 3 if contains Ironkyn Assistant)"
+    },
+    
+    // BRÔKHYR THUNDERKYN
+    "Oathband Covering Fire": {
+      phases: ['endofturn'], // Fire Overwatch se fait généralement à la fin du tour adverse
+      timing: "When targeted with Fire Overwatch Stratagem",
+      description: "Hits are scored on unmodified Hit rolls of 5+ when resolving Fire Overwatch"
+    },
+    
+    // ÛTHAR THE DESTINED (personnage spécial)
+    "Ancestral Fortune": {
+      phases: ['shooting', 'fight'],
+      timing: "Once per turn",
+      description: "You can change one Hit roll or one Wound roll made for this model to an unmodified 6"
+    },
+    "The Destined": {
+      phases: [], // Capacité défensive passive
+      timing: "Each time an attack is allocated to this model",
+      description: "Change the Damage characteristic of that attack to 1"
+    },
     
     // SAGITAUR
     "Blistering Advance": {
@@ -198,6 +264,55 @@ const Warhammer40kAssistant = () => {
       phases: ['shooting'],
       timing: "Shooting phase enhancement",
       description: "1CP stratagem enhancement for shooting attacks"
+    },
+    "A Long List": {
+      phases: ['shooting', 'fight'],
+      timing: "When bearer's unit destroys an enemy unit",
+      description: "If destroyed enemy has Judgement tokens, select another visible enemy unit - it gains 1 Judgement token"
+    },
+    "Wayfarer's Grace": {
+      phases: ['endofturn'],
+      timing: "When bearer is destroyed",
+      description: "First time destroyed: roll D6 at end of phase, on 2+ set back up with full wounds"
+    },
+    "Bastion Shield": {
+      phases: ['shooting'],
+      timing: "When unit is targeted by ranged attacks",
+      description: "Ranged attacks within 12\" have AP worsened by 1"
+    },
+    "High Kâhl": {
+      phases: ['fight'],
+      timing: "When model destroyed by melee attack",
+      description: "If not fought this phase, on 4+ can fight before being removed"
+    },
+    "Ironskein": {
+      phases: ['passive'],
+      timing: "Passive enhancement",
+      description: "Add 2 to bearer's Wounds characteristic"
+    },
+    "Quake Multigenerator": {
+      phases: ['shooting'],
+      timing: "After shooting",
+      description: "Select hit enemy unit (not TITANIC) - until next turn it's suppressed (-1 to Hit)"
+    },
+    
+    // CRESTS SPÉCIAUX
+    "Rampart crest": {
+      phases: [], // Capacité défensive passive
+      timing: "Passive defensive ability",
+      description: "Defensive enhancement for units"
+    },
+    
+    // ÉQUIPEMENTS SPÉCIAUX BRÔKHYR
+    "Ironkyn Assistant": {
+      phases: ['movement'],
+      timing: "When repairing with Brôkhyr's Guild",
+      description: "Increases repair from D3 to 3 wounds when Brôkhyr Iron-master repairs vehicles"
+    },
+    "E-COG": {
+      phases: [], // Unité de soutien passive
+      timing: "Support unit",
+      description: "Support models for Brôkhyr Iron-master - destroyed if Iron-master dies"
     }
   };
 
@@ -389,9 +504,15 @@ const Warhammer40kAssistant = () => {
       case 'command':
         return lowerDesc.includes('command phase') || 
                lowerDesc.includes('your command phase') ||
+               lowerDesc.includes('at the start of your command phase') ||
+               lowerDesc.includes('at the end of your command phase') ||
+               lowerDesc.includes('in your command phase') ||
                lowerDesc.includes('start of') ||
                lowerDesc.includes('end of') ||
                lowerDesc.includes('beginning of') ||
+               lowerDesc.includes('objective marker') ||
+               lowerDesc.includes('battle-shock') ||
+               lowerDesc.includes('leadership test') ||
                lowerDesc.includes('cp') ||
                lowerDesc.includes('command point');
                
@@ -400,12 +521,14 @@ const Warhammer40kAssistant = () => {
                lowerDesc.includes('advance') || 
                lowerDesc.includes('fall back') ||
                lowerDesc.includes('movement phase') ||
-               lowerDesc.includes('scout') ||
-               lowerDesc.includes('infiltrator') ||
-               lowerDesc.includes('outflank') ||
-               lowerDesc.includes('redeploy') ||
-               lowerName.includes('speed') ||
-               lowerName.includes('swift');
+               lowerDesc.includes('at the end of your movement phase') ||
+               lowerDesc.includes('after this transport has advanced') ||
+               lowerDesc.includes('disembark') ||
+               lowerDesc.includes('embark') ||
+               lowerDesc.includes('repair') ||
+               lowerDesc.includes('deep strike') ||
+               lowerDesc.includes('reserves') ||
+               lowerDesc.includes('deployment');
                
       case 'shooting':
         return lowerDesc.includes('shoot') || 
@@ -1290,10 +1413,11 @@ const Warhammer40kAssistant = () => {
                 let enhancementName = selection.name;
                 
                 // Si pas trouvé, chercher dans les profiles de la sélection
-                if (!enhancementName || !['Appraising Glare', 'Grim Demeanour', 'Ancestral Sentence'].includes(enhancementName)) {
-                  // Chercher "Appraising Glare" dans les profiles
+                if (!enhancementName || !['Appraising Glare', 'Grim Demeanour', 'Ancestral Sentence', 'A Long List', 'Wayfarer\'s Grace', 'Bastion Shield', 'High Kâhl', 'Ironskein', 'Quake Multigenerator'].includes(enhancementName)) {
+                  // Chercher tous les enhancements connus dans les profiles
+                  const knownEnhancements = ['Appraising Glare', 'Grim Demeanour', 'Ancestral Sentence', 'A Long List', 'Wayfarer\'s Grace', 'Bastion Shield', 'High Kâhl', 'Ironskein', 'Quake Multigenerator'];
                   const profile = selection.profiles?.find((p: any) => 
-                    p.typeName === 'Abilities' && p.name === 'Appraising Glare'
+                    p.typeName === 'Abilities' && knownEnhancements.includes(p.name)
                   );
                   if (profile) {
                     enhancementName = profile.name;
@@ -1315,6 +1439,30 @@ const Warhammer40kAssistant = () => {
                     'Ancestral Sentence': {
                       phases: ['shooting'],
                       description: 'Shooting phase: 1CP stratagem enhancement'
+                    },
+                    'A Long List': {
+                      phases: ['shooting', 'fight'],
+                      description: 'When bearer destroys enemy with Judgement tokens, select another visible enemy - it gains 1 Judgement token'
+                    },
+                    'Wayfarer\'s Grace': {
+                      phases: ['endofturn'],
+                      description: 'First time destroyed: roll D6 at end of phase, on 2+ set back up with full wounds'
+                    },
+                    'Bastion Shield': {
+                      phases: ['shooting'],
+                      description: 'Ranged attacks within 12" have AP worsened by 1'
+                    },
+                    'High Kâhl': {
+                      phases: ['fight'],
+                      description: 'If not fought this phase, on 4+ can fight before being removed'
+                    },
+                    'Ironskein': {
+                      phases: ['command'],
+                      description: 'Add 2 to bearer\'s Wounds characteristic (passive)'
+                    },
+                    'Quake Multigenerator': {
+                      phases: ['shooting'],
+                      description: 'After shooting: select hit enemy unit (not TITANIC) - until next turn it\'s suppressed (-1 to Hit)'
                     }
                   };
                   
