@@ -1,0 +1,86 @@
+{
+  "stratagems": [
+    {
+      "name": "Squires' Duty",
+      "cost": 1,
+      "type": "Noble Lance – Battle Tactic Stratagem",
+      "phase": "shooting,fight",
+      "timing": "The start of your Shooting phase or the start of the Fight phase",
+      "target": "Two or more ARMIGER models from your army and one enemy unit that is an eligible target for all of those ARMIGER models",
+      "effect": "Until the end of the phase, when resolving attacks that target that enemy unit, improve the Strength and Armour Penetration characteristics of weapons equipped by those ARMIGER models by 1. If your army is Honoured, until the end of the phase, add 1 to the Damage characteristic of those weapons as well",
+      "flavorText": "Under the scrutiny and judgement of their Noble betters, Armiger pilots will redouble their efforts, attacking as one to smash aside their foes",
+      "keywords": ["IMPERIAL KNIGHTS", "ARMIGER"],
+      "unitTypes": ["ARMIGER"],
+      "frequency": "once_per_turn"
+    },
+    {
+      "name": "Rotate Ion Shields",
+      "cost": 1,
+      "type": "Noble Lance – Wargear Stratagem",
+      "phase": "shooting",
+      "timing": "Your opponent's Shooting phase, just after an enemy unit has selected its targets",
+      "target": "One IMPERIAL KNIGHTS model from your army that was selected as the target of one or more of the attacking unit's attacks",
+      "effect": "Until the end of the phase, that IMPERIAL KNIGHTS model has a 4+ invulnerable save against ranged attacks",
+      "flavorText": "Veteran Knight pilots can swiftly angle their ion shields to better deflect incoming fire",
+      "keywords": ["IMPERIAL KNIGHTS"],
+      "unitTypes": ["any"],
+      "frequency": "once_per_turn"
+    },
+    {
+      "name": "Thunderstomp",
+      "cost": 1,
+      "type": "Noble Lance – Epic Deed Stratagem",
+      "phase": "fight",
+      "timing": "Fight phase",
+      "target": "One IMPERIAL KNIGHTS model from your army that has not been selected to fight this phase",
+      "effect": "Until the end of the phase, your model cannot target MONSTER or VEHICLE units, but all melee weapons equipped by your model have the [DEVASTATING WOUNDS] ability",
+      "flavorText": "The Noble brings their Knight suit's full weight crashing down with the force of an industrial piledriver. Few can survive such a blow",
+      "keywords": ["IMPERIAL KNIGHTS"],
+      "unitTypes": ["any"],
+      "frequency": "once_per_turn"
+    },
+    {
+      "name": "Valiant Last Stand",
+      "cost": 2,
+      "type": "Noble Lance – Epic Deed Stratagem",
+      "phase": "fight",
+      "timing": "Fight phase",
+      "target": "One IMPERIAL KNIGHTS model from your army that was just destroyed and that is eligible to fight but has not been selected to fight this phase. You can use this Stratagem on that model even though it was just destroyed",
+      "effect": "Before rolling to see if this model deals any mortal wounds as a result of its Deadly Demise ability, it can fight; when doing so, it is assumed to have 1 wound remaining, or all its wounds remaining if your army is Honoured. After it has finished resolving its attacks, resolve its Deadly Demise ability as normal",
+      "flavorText": "Badly wounded, their Knight's generator on the verge of overload, still the Noble fights on, drawing upon their reserves of chivalric heroism to sell their life as dearly as they can",
+      "restrictions": "You cannot target SIR HEKHTUR with this Stratagem",
+      "keywords": ["IMPERIAL KNIGHTS"],
+      "unitTypes": ["any"],
+      "frequency": "once_per_turn"
+    },
+    {
+      "name": "Trophy Claim",
+      "cost": 2,
+      "type": "Noble Lance – Epic Deed Stratagem",
+      "phase": "shooting,fight",
+      "timing": "Your Shooting phase or the Fight phase",
+      "target": "One IMPERIAL KNIGHTS model from your army that has not been selected to shoot or fight this phase, and one enemy MONSTER or VEHICLE unit",
+      "effect": "Until the end of the phase, each time your model makes an attack that targets that enemy unit, add 1 to the Wound roll. If your model destroys that enemy unit this phase, you gain 1CP, but if your model does not destroy that enemy unit this phase, you cannot use this Stratagem again for the rest of the battle",
+      "flavorText": "Once a mighty foe is laid low, the victorious Knight's emitters blare its triumph, announcing the glory brought to the Imperium, but shame awaits those who fail in such confrontations",
+      "keywords": ["IMPERIAL KNIGHTS"],
+      "unitTypes": ["any"],
+      "frequency": "once_per_battle"
+    },
+    {
+      "name": "Shoulder the Burden",
+      "cost": 2,
+      "type": "Noble Lance – Battle Tactic Stratagem",
+      "phase": "command",
+      "timing": "Your Command phase",
+      "target": "One IMPERIAL KNIGHTS model from your army that has lost one or more wounds",
+      "effect": "Until the start of your next Command phase, improve your model's Move, Toughness, Save, Leadership and Objective Control characteristics by 1 and each time your model makes an attack, add 1 to the Hit roll",
+      "flavorText": "When faced with their darkest hour, knightly Nobles rise to the challenge, for nothing shall deter them from fulfilling their duty",
+      "restrictions": "You can only use this Stratagem once per battle. If your army is Honoured, you can use this Stratagem one additional time",
+      "keywords": ["IMPERIAL KNIGHTS"],
+      "unitTypes": ["any"],
+      "frequency": "once_per_battle"
+    }
+  ],
+  "source": "Wahapedia - Imperial Knights Index - Noble Lance Stratagems",
+  "note": "Définitions officielles des stratagèmes Noble Lance Imperial Knights"
+} 

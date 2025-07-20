@@ -13,6 +13,7 @@ const Warhammer40kAssistant = () => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [expandedRules, setExpandedRules] = useState<Record<string, boolean>>({});
   const [resolvedRules, setResolvedRules] = useState<Record<string, boolean>>({});
+  const [selectedOath, setSelectedOath] = useState<string | null>(null); // 'Lay Low The Tyrant' | 'Reclaim the Realm'
 
   const phases = [
     { id: 'command', name: 'Commandement', icon: Users, color: 'bg-blue-500' },
@@ -89,6 +90,90 @@ const Warhammer40kAssistant = () => {
 
   ];
 
+  // Base de données des stratagèmes Imperial Knights (OFFICIEL - Wahapedia)
+  const IMPERIAL_KNIGHTS_STRATAGEMS = [
+    {
+      name: "Squires' Duty",
+      cost: 1,
+      type: "Noble Lance – Battle Tactic Stratagem",
+      phase: "shooting,fight",
+      timing: "The start of your Shooting phase or the start of the Fight phase",
+      target: "Two or more ARMIGER models from your army and one enemy unit that is an eligible target for all of those ARMIGER models",
+      effect: "Until the end of the phase, when resolving attacks that target that enemy unit, improve the Strength and Armour Penetration characteristics of weapons equipped by those ARMIGER models by 1. If your army is Honoured, until the end of the phase, add 1 to the Damage characteristic of those weapons as well",
+      flavorText: "Under the scrutiny and judgement of their Noble betters, Armiger pilots will redouble their efforts, attacking as one to smash aside their foes",
+      keywords: ["IMPERIAL KNIGHTS", "ARMIGER"],
+      unitTypes: ["ARMIGER"],
+      frequency: "once_per_turn"
+    },
+    {
+      name: "Rotate Ion Shields",
+      cost: 1,
+      type: "Noble Lance – Wargear Stratagem",
+      phase: "shooting",
+      timing: "Your opponent's Shooting phase, just after an enemy unit has selected its targets",
+      target: "One IMPERIAL KNIGHTS model from your army that was selected as the target of one or more of the attacking unit's attacks",
+      effect: "Until the end of the phase, that IMPERIAL KNIGHTS model has a 4+ invulnerable save against ranged attacks",
+      flavorText: "Veteran Knight pilots can swiftly angle their ion shields to better deflect incoming fire",
+      keywords: ["IMPERIAL KNIGHTS"],
+      unitTypes: ["any"],
+      frequency: "once_per_turn"
+    },
+    {
+      name: "Thunderstomp",
+      cost: 1,
+      type: "Noble Lance – Epic Deed Stratagem",
+      phase: "fight",
+      timing: "Fight phase",
+      target: "One IMPERIAL KNIGHTS model from your army that has not been selected to fight this phase",
+      effect: "Until the end of the phase, your model cannot target MONSTER or VEHICLE units, but all melee weapons equipped by your model have the [DEVASTATING WOUNDS] ability",
+      flavorText: "The Noble brings their Knight suit's full weight crashing down with the force of an industrial piledriver. Few can survive such a blow",
+      keywords: ["IMPERIAL KNIGHTS"],
+      unitTypes: ["any"],
+      frequency: "once_per_turn"
+    },
+    {
+      name: "Valiant Last Stand",
+      cost: 2,
+      type: "Noble Lance – Epic Deed Stratagem",
+      phase: "fight",
+      timing: "Fight phase",
+      target: "One IMPERIAL KNIGHTS model from your army that was just destroyed and that is eligible to fight but has not been selected to fight this phase. You can use this Stratagem on that model even though it was just destroyed",
+      effect: "Before rolling to see if this model deals any mortal wounds as a result of its Deadly Demise ability, it can fight; when doing so, it is assumed to have 1 wound remaining, or all its wounds remaining if your army is Honoured. After it has finished resolving its attacks, resolve its Deadly Demise ability as normal",
+      flavorText: "Badly wounded, their Knight's generator on the verge of overload, still the Noble fights on, drawing upon their reserves of chivalric heroism to sell their life as dearly as they can",
+      restrictions: "You cannot target SIR HEKHTUR with this Stratagem",
+      keywords: ["IMPERIAL KNIGHTS"],
+      unitTypes: ["any"],
+      frequency: "once_per_turn"
+    },
+    {
+      name: "Trophy Claim",
+      cost: 2,
+      type: "Noble Lance – Epic Deed Stratagem",
+      phase: "shooting,fight",
+      timing: "Your Shooting phase or the Fight phase",
+      target: "One IMPERIAL KNIGHTS model from your army that has not been selected to shoot or fight this phase, and one enemy MONSTER or VEHICLE unit",
+      effect: "Until the end of the phase, each time your model makes an attack that targets that enemy unit, add 1 to the Wound roll. If your model destroys that enemy unit this phase, you gain 1CP, but if your model does not destroy that enemy unit this phase, you cannot use this Stratagem again for the rest of the battle",
+      flavorText: "Once a mighty foe is laid low, the victorious Knight's emitters blare its triumph, announcing the glory brought to the Imperium, but shame awaits those who fail in such confrontations",
+      keywords: ["IMPERIAL KNIGHTS"],
+      unitTypes: ["any"],
+      frequency: "once_per_battle"
+    },
+    {
+      name: "Shoulder the Burden",
+      cost: 2,
+      type: "Noble Lance – Battle Tactic Stratagem",
+      phase: "command",
+      timing: "Your Command phase",
+      target: "One IMPERIAL KNIGHTS model from your army that has lost one or more wounds",
+      effect: "Until the start of your next Command phase, improve your model's Move, Toughness, Save, Leadership and Objective Control characteristics by 1 and each time your model makes an attack, add 1 to the Hit roll",
+      flavorText: "When faced with their darkest hour, knightly Nobles rise to the challenge, for nothing shall deter them from fulfilling their duty",
+      restrictions: "You can only use this Stratagem once per battle. If your army is Honoured, you can use this Stratagem one additional time",
+      keywords: ["IMPERIAL KNIGHTS"],
+      unitTypes: ["any"],
+      frequency: "once_per_battle"
+    }
+  ];
+
   // Base de données complète des capacités et leurs phases correctes
   // ✅ TOUTES LES UNITÉS LEAGUES OF VOTANN SONT COUVERTES
   // 
@@ -107,7 +192,86 @@ const Warhammer40kAssistant = () => {
   // - Brôkhyr Thunderkyn (Oathband Covering Fire) ✅
   // - Hekaton Land Fortress (Fire Support + Damaged) ✅
   //
-  const ABILITY_PHASE_MAPPING: { [key: string]: { phases: string[], description?: string, timing?: string } } = {
+  const ABILITY_PHASE_MAPPING: { [key: string]: { phases: string[], description?: string, timing?: string, playerOnly?: boolean } } = {
+
+    "Indomitable Heroes": {
+      phases: ['shooting', 'fight'],
+      timing: "When saving against attacks",
+      description: "This model has a Feel No Pain 6+ ability. If this model is Honoured and has completed its Deed, it has a Feel No Pain 5+ ability instead.",
+      playerOnly: false // Peut être utilisé pendant le tour adverse
+    },
+    "Lay Low The Tyrant": {
+      phases: ['shooting', 'fight'],
+      timing: "Each time this model is selected to shoot or fight",
+      description: "You can re-roll one Hit roll and you can re-roll one Wound roll.",
+      playerOnly: true
+    },
+    "Reclaim the Realm": {
+      phases: ['movement', 'charge'],
+      timing: "Passive",
+      description: "Add 1\" to this model's Move characteristic and add 1 to Advance and Charge rolls made for this model.",
+      playerOnly: true
+    },
+    "Ion Aegis (Aura)": {
+      phases: [], // Capacité passive - pas besoin d'affichage spécifique
+      timing: "Passive - While a friendly ARMIGER model is within 6\"",
+      description: "While a friendly ARMIGER model is within 6\" of this model, that ARMIGER model has the Benefits of Cover."
+    },
+    "Overwhelming Firestorm": {
+      phases: ['shooting'],
+      timing: "In your Shooting phase, after this model has shot",
+      description: "Select one enemy unit hit by this model this phase. That unit must take a Battle-shock test."
+    },
+    "Invulnerable Save (5+*)": {
+      phases: ['shooting'], // Affiché pendant la phase de tir adverse
+      timing: "When saving against ranged attacks",
+      description: "This model has a 5+ invulnerable save against ranged attacks."
+    },
+    "Damaged: 1-10 Wounds Remaining": {
+      phases: ['shooting', 'fight'],
+      timing: "While this model has 1-10 wounds remaining",
+      description: "Subtract 5 from this model's Objective Control characteristic and each time this model makes an attack, subtract 1 from the Hit roll."
+    },
+    "Damaged: 1-5 Wounds Remaining": {
+      phases: ['shooting', 'fight'],
+      timing: "While this model has 1-5 wounds remaining",
+      description: "Subtract 3 from this model's Objective Control characteristic and each time this model makes an attack, subtract 1 from the Hit roll."
+    },
+    "Protection Protocols": {
+      phases: ['charge'], // Pendant la phase de charge adverse
+      timing: "Enemy Charge phase",
+      description: "You can target this unit with the Heroic Intervention Stratagem for 0CP, and can do so even if you have already targeted a different unit with that Stratagem this phase."
+    },
+    "Impetuous Glory": {
+      phases: ['charge'], // Se déclenche en charge, l'effet dure jusqu'à la fin du tour
+      timing: "Each time this model makes a Charge move",
+      description: "Until the end of the turn, melee weapons equipped by this model have the [SUSTAINED HITS 1] ability.",
+      playerOnly: true // Seulement pendant le tour du joueur
+    },
+    "Mysterious Guardian": {
+      phases: ['endofturn'], // À la fin du tour adverse
+      timing: "Once per battle, at the end of your opponent's turn",
+      description: "If the bearer is not within Engagement Range of any enemy units, it can fade away and return in your next Movement phase."
+    },
+    "Super-Heavy Walker": {
+      phases: ['movement'],
+      timing: "Each time this model makes a Normal, Advance or Fall Back move",
+      description: "It can move through models and terrain features that are 4\" or less in height.",
+      playerOnly: true
+    },
+    "Deadly Demise D6+2": {
+      phases: ['any'], // Peut se déclencher à n'importe quel moment
+      timing: "When this model is destroyed",
+      description: "Roll one D6 before removing it from play. On a 6, each unit within 6\" suffers D6+2 mortal wounds.",
+      playerOnly: false // Peut se déclencher pendant le tour adverse aussi
+    },
+    "Deadly Demise D3": {
+      phases: ['any'], // Peut se déclencher à n'importe quel moment
+      timing: "When this model is destroyed",
+      description: "Roll one D6 before removing it from play. On a 6, each unit within 6\" suffers D3 mortal wounds.",
+      playerOnly: false // Peut se déclencher pendant le tour adverse aussi
+    },
+
     // EINHYR CHAMPION
     "Exemplar of the Einhyr": {
       phases: ['charge'],
@@ -319,9 +483,27 @@ const Warhammer40kAssistant = () => {
     // Fonction intelligente pour déterminer si une capacité est pertinente pour la phase
   const isAbilityRelevantForPhase = (abilityName: string, abilityDescription: string, currentPhase: string, currentActivePlayer: string = activePlayer): boolean => {
 
-    // FILTRE ABSOLU : Teleport crest ne doit JAMAIS s'afficher (capacité purement passive)
-    if (abilityName === 'Teleport crest') {
+    // FILTRE ABSOLU : Capacités qui ne doivent JAMAIS s'afficher dans les suggestions normales
+    if (abilityName === 'Teleport crest' || abilityName === 'Code Chivalric') {
       return false;
+    }
+    
+    // LOGIQUE SPÉCIALE POUR MYSTERIOUS GUARDIAN
+    if (abilityName === 'Mysterious Guardian') {
+      // Mysterious Guardian ne s'affiche qu'à la fin du tour adverse
+      return currentPhase === 'endofturn' && currentActivePlayer === 'opponent';
+    }
+    
+    // LOGIQUE SPÉCIALE POUR PROTECTION PROTOCOLS
+    if (abilityName === 'Protection Protocols') {
+      // Protection Protocols ne s'affiche que pendant la phase de charge adverse
+      return currentPhase === 'charge' && currentActivePlayer === 'opponent';
+    }
+    
+    // LOGIQUE SPÉCIALE POUR INVULNERABLE SAVE
+    if (abilityName === 'Invulnerable Save (5+*)') {
+      // Invulnerable Save ne s'affiche que pendant la phase de tir adverse
+      return currentPhase === 'shooting' && currentActivePlayer === 'opponent';
     }
     
     // PREMIÈRE ÉTAPE : Vérifier universellement si c'est une capacité du tour adverse
@@ -414,6 +596,11 @@ const Warhammer40kAssistant = () => {
     // DEUXIÈME ÉTAPE : Vérifier dans notre base de données pour les capacités de notre tour
     const mapping = ABILITY_PHASE_MAPPING[abilityName];
     if (mapping) {
+      // Vérification pour les capacités playerOnly
+      if (mapping.playerOnly && currentActivePlayer !== 'player') {
+        return false; // Ne pas afficher les capacités playerOnly pendant le tour adverse
+      }
+      
       // Les capacités de déploiement s'affichent en phase de commandement
       if (mapping.phases.includes('deployment')) {
         return currentPhase === 'command';
@@ -863,7 +1050,56 @@ const Warhammer40kAssistant = () => {
         totalPoints,
         units,
         detachmentRules,
-        factionRules: roster.rules || []
+        factionRules: (() => {
+          // Extraire les règles d'armée depuis forces[0].rules ET forces[0].selections
+          const factionRules: any[] = [];
+          console.log('🔍 DEBUG PARSING: roster.forces[0].rules:', roster.forces?.[0]?.rules);
+          
+          // Règles directes de forces[0].rules
+          if (roster.forces && roster.forces[0] && roster.forces[0].rules) {
+            roster.forces[0].rules.forEach((rule: any) => {
+              console.log('🔍 DEBUG PARSING: Règle trouvée (directe):', rule.name);
+              factionRules.push({
+                name: rule.name,
+                description: rule.description
+              });
+            });
+          }
+          
+          // Règles dans les sélections (comme "Noble Lance")
+          if (roster.forces && roster.forces[0] && roster.forces[0].selections) {
+            roster.forces[0].selections.forEach((selection: any) => {
+              // Règles directes de la sélection
+              if (selection.rules) {
+                selection.rules.forEach((rule: any) => {
+                  console.log('🔍 DEBUG PARSING: Règle trouvée (sélection):', rule.name);
+                  factionRules.push({
+                    name: rule.name,
+                    description: rule.description
+                  });
+                });
+              }
+              
+              // Règles dans les sous-sélections (comme dans "Noble Lance")
+              if (selection.selections) {
+                selection.selections.forEach((subSelection: any) => {
+                  if (subSelection.rules) {
+                    subSelection.rules.forEach((rule: any) => {
+                      console.log('🔍 DEBUG PARSING: Règle trouvée (sous-sélection):', rule.name);
+                      factionRules.push({
+                        name: rule.name,
+                        description: rule.description
+                      });
+                    });
+                  }
+                });
+              }
+            });
+          }
+          
+          console.log('🔍 DEBUG PARSING: factionRules final:', factionRules);
+          return factionRules;
+        })()
       };
     } catch (error) {
       console.error('Erreur parsing JSON:', error);
@@ -1013,6 +1249,27 @@ const Warhammer40kAssistant = () => {
     const battleStartRules: any[] = [];
     const seenRules = new Set();
     
+    // Détecter si c'est une armée Imperial Knights
+    const isImperialKnights = armyData?.forces?.[0]?.selections?.some((selection: any) => 
+      selection.categories?.some((cat: any) => cat.name === 'Faction: Imperial Knights')
+    );
+    
+    // Code Chivalric pour Imperial Knights
+    // Essayer aussi de détecter via les unités
+    const isImperialKnightsViaUnits = armyData?.units?.some((unit: any) => 
+      unit.categories?.some((cat: any) => cat.name === 'Faction: Imperial Knights')
+    );
+    
+    if ((isImperialKnights || isImperialKnightsViaUnits) && !seenRules.has('Code Chivalric')) {
+      battleStartRules.push({
+        source: 'Faction: Imperial Knights',
+        name: 'Code Chivalric',
+        description: 'If your Army Faction is IMPERIAL KNIGHTS, at the end of the Read Mission Objectives step, you must select one of the Oaths below to be active for your army. Models from your army with this ability gain the associated Oath ability, and you gain the associated Deed to complete.\n\nLay Low The Tyrant\n- Oath Ability: Each time this model is selected to shoot or fight, you can re-roll one Hit roll and you can re-roll one Wound roll.\n- Deed: This deed is completed if the enemy WARLORD is destroyed.\n\nReclaim the Realm\n- Oath Ability: Add 1" to this model\'s Move characteristic and add 1 to Advance and Charge rolls made for this model.\n- Deed: This deed is completed if you control one or more objective markers in your opponent\'s deployment zone.',
+        priority: 1
+      });
+      seenRules.add('Code Chivalric');
+    }
+    
     armyData.units?.forEach((unit: any) => {
       unit.rules?.forEach((rule: any) => {
         if (rule.name === 'Eye of the Ancestors' && !seenRules.has(rule.name)) {
@@ -1020,7 +1277,7 @@ const Warhammer40kAssistant = () => {
             source: 'Faction: Leagues of Votann',
             name: rule.name,
             description: rule.description,
-            priority: 1
+            priority: 2
           });
           seenRules.add(rule.name);
         }
@@ -1033,7 +1290,7 @@ const Warhammer40kAssistant = () => {
           source: 'Détachement',
           name: rule.name,
           description: rule.description,
-          priority: 2
+          priority: 3
         });
         seenRules.add(rule.name);
       }
@@ -1049,13 +1306,31 @@ const Warhammer40kAssistant = () => {
     }));
   };
 
-  // Fonction pour obtenir les stratagèmes applicables à une unité
+    // Fonction pour obtenir les stratagèmes applicables à une unité
   const getApplicableStratagems = (unit: any, phase: string, currentActivePlayer: string) => {
     if (!unit) return [];
-    
-    return LEAGUES_STRATAGEMS.filter(stratagem => {
-      // Filtrer par phase - mais pour les stratagèmes "any", vérifier le timing
-      if (stratagem.phase !== phase && stratagem.phase !== "any") return false;
+
+    // Détecter si c'est une armée Imperial Knights
+    const isImperialKnights = armyData?.forces?.[0]?.selections?.some((selection: any) => 
+      selection.categories?.some((cat: any) => cat.name === 'Faction: Imperial Knights')
+    ) || unit.categories?.some((cat: any) => cat.name === 'Faction: Imperial Knights');
+
+
+
+    // Choisir les stratagèmes appropriés
+    const stratagems = isImperialKnights ? IMPERIAL_KNIGHTS_STRATAGEMS : LEAGUES_STRATAGEMS;
+
+
+    return stratagems.filter(stratagem => {
+
+      
+      // Filtrer par phase - gérer les phases multiples séparées par des virgules
+      const stratagemPhases = stratagem.phase.split(',').map((p: string) => p.trim());
+      const phaseMatch = stratagemPhases.includes(phase) || stratagem.phase === "any";
+      
+      if (!phaseMatch) {
+        return false;
+      }
       
       // Filtrer les stratagèmes réactifs qui ne s'activent pas dans les phases normales
       if (stratagem.phase === "reactive") {
@@ -1063,55 +1338,109 @@ const Warhammer40kAssistant = () => {
         return false;
       }
       
-      // GESTION DES STRATAGEMES DEFENSIFS vs OFFENSIFS
-      // VOID ARMOUR - Peut être utilisé quand vos unités sont ciblées
-      if (stratagem.name === "Void Armour") {
-        if (currentActivePlayer === 'opponent') {
-          // Tour adverse : shooting et fight phases (quand l'ennemi attaque)
-          return phase === "shooting" || phase === "fight";
-        } else {
-          // Votre tour : seulement fight phase (quand l'ennemi riposte)
+      // Gestion spéciale pour "endofturn" - afficher en phase "command" du tour suivant
+      if (stratagem.phase === "endofturn") {
+        return phase === "command" && currentActivePlayer === 'player';
+      }
+      
+      // GESTION DES STRATAGEMES IMPERIAL KNIGHTS (OFFICIEL - Wahapedia)
+      if (isImperialKnights) {
+        // SQUIRES' DUTY - Phase Shooting ou Fight (ARMIGER uniquement)
+        if (stratagem.name === "Squires' Duty") {
+          const unitKeywords = unit.categories?.map((cat: any) => cat.name.toLowerCase()) || [];
+          const isArmiger = unitKeywords.includes("armiger");
+          return (phase === "shooting" || phase === "fight") && currentActivePlayer === 'player' && isArmiger;
+        }
+        
+        // ROTATE ION SHIELDS - Seulement quand l'ennemi tire sur vous
+        if (stratagem.name === "Rotate Ion Shields") {
+          return phase === "shooting" && currentActivePlayer === 'opponent';
+        }
+        
+        // THUNDERSTOMP - Phase Fight
+        if (stratagem.name === "Thunderstomp") {
+          return phase === "fight" && currentActivePlayer === 'player';
+        }
+        
+        // VALIANT LAST STAND - Phase Fight (quand un modèle est détruit)
+        if (stratagem.name === "Valiant Last Stand") {
           return phase === "fight";
         }
-      }
-      
-      // REACTIVE REPRISAL - Seulement pendant Enemy Shooting phase
-      if (stratagem.name === "Reactive Reprisal") {
-        if (currentActivePlayer === 'opponent' && phase === "shooting") {
-          return true;
+        
+        // TROPHY CLAIM - VOTRE Shooting phase ou LA Fight phase (votre tour ET tour adverse)
+        if (stratagem.name === "Trophy Claim") {
+          const shouldShow = (phase === "shooting" && currentActivePlayer === 'player') || phase === "fight";
+          return shouldShow;
         }
+        
+        // SHOULDER THE BURDEN - VOTRE Command phase
+        if (stratagem.name === "Shoulder the Burden") {
+          return phase === "command" && currentActivePlayer === 'player';
+        }
+        
+        // Vérifier si le stratagème s'applique au type d'unité
+        if (stratagem.unitTypes.includes("any")) return true;
+        
+        // Vérifier les mots-clés de l'unité
+        const unitKeywords = unit.categories?.map((cat: any) => cat.name.toLowerCase()) || [];
+        
+        // Vérifier chaque type d'unité requis par le stratagème
+        for (const unitType of stratagem.unitTypes) {
+          if (unitType === "Vehicle" && unitKeywords.includes("vehicle")) {
+            return true;
+          }
+          if (unitType === "ARMIGER" && unitKeywords.includes("armiger")) {
+            return true;
+          }
+          if (unitType === "exo-armour" && unitKeywords.includes("exo-armour")) {
+            return true;
+          }
+        }
+        
         return false;
-      }
-      
-      // Pour les stratagèmes avec phase "any" (non défensifs)
-      if (stratagem.phase === "any") {
-        // "Void Armour" déjà géré ci-dessus
+      } else {
+        // STRATAGEMES LEAGUES OF VOTANN
+        // VOID ARMOUR - Peut être utilisé quand vos unités sont ciblées
         if (stratagem.name === "Void Armour") {
-          return false; // Déjà traité dans la section défensive
+          if (currentActivePlayer === 'opponent') {
+            // Tour adverse : shooting et fight phases (quand l'ennemi attaque)
+            return phase === "shooting" || phase === "fight";
+          } else {
+            // Votre tour : seulement fight phase (quand l'ennemi riposte)
+            return phase === "fight";
+          }
         }
-      }
-      
-      // STRATAGEMES OFFENSIFS - seulement pendant VOTRE tour
-      const offensiveStratagems = ["Ancestral Sentence", "Ordered Retreat"];
-      if (offensiveStratagems.includes(stratagem.name)) {
-        if (currentActivePlayer === 'opponent') {
-          console.log(`🚫 STRATAGÈME OFFENSIF "${stratagem.name}" bloqué pendant le tour adverse`);
-          return false; // Ne pas afficher pendant le tour adverse
+        
+        // REACTIVE REPRISAL - Seulement pendant Enemy Shooting phase
+        if (stratagem.name === "Reactive Reprisal") {
+          if (currentActivePlayer === 'opponent' && phase === "shooting") {
+            return true;
+          }
+          return false;
         }
+        
+        // STRATAGEMES OFFENSIFS - seulement pendant VOTRE tour
+        const offensiveStratagems = ["Ancestral Sentence", "Ordered Retreat"];
+        if (offensiveStratagems.includes(stratagem.name)) {
+          if (currentActivePlayer === 'opponent') {
+            console.log(`🚫 STRATAGÈME OFFENSIF "${stratagem.name}" bloqué pendant le tour adverse`);
+            return false; // Ne pas afficher pendant le tour adverse
+          }
+        }
+        
+        // Vérifier si le stratagème s'applique au type d'unité
+        if (stratagem.unitTypes.includes("any")) return true;
+        
+        // Vérifier les mots-clés de l'unité
+        const unitKeywords = unit.categories?.map((cat: any) => cat.name.toLowerCase()) || [];
+        
+        if (stratagem.unitTypes.includes("exo-armour")) {
+          return unitKeywords.includes("exo-armour");
+        }
+        
+        // Par défaut, applicable à toutes les unités Leagues of Votann
+        return unitKeywords.includes("faction: leagues of votann");
       }
-      
-      // Vérifier si le stratagème s'applique au type d'unité
-      if (stratagem.unitTypes.includes("any")) return true;
-      
-      // Vérifier les mots-clés de l'unité
-      const unitKeywords = unit.categories?.map((cat: any) => cat.name.toLowerCase()) || [];
-      
-      if (stratagem.unitTypes.includes("exo-armour")) {
-        return unitKeywords.includes("exo-armour");
-      }
-      
-      // Par défaut, applicable à toutes les unités Leagues of Votann
-      return unitKeywords.includes("faction: leagues of votann");
     });
   };
 
@@ -1198,8 +1527,126 @@ const Warhammer40kAssistant = () => {
       }
     }
 
+    // Suggestions spéciales pour Imperial Knights
+    const isImperialKnights = armyData?.forces?.[0]?.selections?.some((selection: any) => 
+      selection.categories?.some((cat: any) => cat.name === 'Faction: Imperial Knights')
+    );
     
-
+    // Essayer aussi de détecter via les unités (comme dans getBattleStartRules)
+    const isImperialKnightsViaUnits = armyData?.units?.some((unit: any) => 
+      unit.categories?.some((cat: any) => cat.name === 'Faction: Imperial Knights')
+    );
+    
+    const finalIsImperialKnights = isImperialKnights || isImperialKnightsViaUnits;
+    
+    console.log('🔍 DEBUG: finalIsImperialKnights:', finalIsImperialKnights);
+    console.log('🔍 DEBUG: armyData?.forces?.[0]?.rules:', armyData?.forces?.[0]?.rules);
+    console.log('🔍 DEBUG: Structure complète de forces[0]:', armyData?.forces?.[0]);
+    console.log('🔍 DEBUG: Toutes les propriétés de forces[0]:', Object.keys(armyData?.forces?.[0] || {}));
+    console.log('🔍 DEBUG: Structure complète de armyData:', armyData);
+    console.log('🔍 DEBUG: Propriétés de armyData:', Object.keys(armyData || {}));
+    console.log('🔍 DEBUG: armyData.forces:', armyData?.forces);
+    console.log('🔍 DEBUG: armyData.factionRules:', armyData?.factionRules);
+    console.log('🔍 DEBUG: armyData.detachmentRules:', armyData?.detachmentRules);
+    
+    // TRAITEMENT DES RÈGLES D'ARMÉE (applicables à toutes les unités)
+    if (finalIsImperialKnights && armyData?.factionRules) {
+      console.log('🔍 DEBUG: Traitement des règles d\'armée Imperial Knights');
+      console.log('🔍 DEBUG: Règles d\'armée trouvées:', armyData.factionRules.map((r: any) => r.name));
+      
+      armyData.factionRules.forEach((armyRule: any) => {
+        const ruleName = armyRule.name;
+        const ruleDescription = armyRule.description || 'Règle d\'armée';
+        
+        console.log(`🔍 DEBUG: Traitement de la règle d'armée: ${ruleName}`);
+        
+        // Traiter spécifiquement "Indomitable Heroes"
+        if (ruleName === 'Indomitable Heroes') {
+          console.log('🔍 DEBUG: Indomitable Heroes trouvé!');
+          console.log('🔍 DEBUG: Phase actuelle:', currentPhase);
+          console.log('🔍 DEBUG: Joueur actif:', activePlayer);
+          
+          // Indomitable Heroes s'applique seulement quand l'unité peut subir des dégâts (pas pendant votre tour d'attaque)
+          const phaseCheck = (currentPhase === 'shooting' || currentPhase === 'fight');
+          
+          // Feel No Pain s'active seulement quand vous subissez des dégâts, pas quand vous attaquez
+          const playerCheck = (
+            (currentPhase === 'shooting' && activePlayer === 'opponent') || // Ennemi tire sur vous
+            (currentPhase === 'fight' && activePlayer === 'opponent') || // Ennemi combat contre vous
+            (currentPhase === 'fight' && activePlayer === 'player') // Ennemi riposte contre vous
+          );
+          
+          console.log('🔍 DEBUG: Phase check (shooting/fight):', phaseCheck);
+          console.log('🔍 DEBUG: Player check (défensif):', playerCheck);
+          
+          if (phaseCheck && playerCheck) {
+            
+            // Éviter les doublons
+            const abilityKey = `army-${ruleName}`;
+            if (!seenAbilities.has(abilityKey)) {
+              seenAbilities.add(abilityKey);
+              
+              // Utiliser les informations de notre base de données si disponible
+              const abilityMapping = ABILITY_PHASE_MAPPING[ruleName];
+              let displayDescription = ruleDescription;
+              let timing = '';
+              
+              if (abilityMapping) {
+                if (abilityMapping.timing) {
+                  timing = `📅 ${abilityMapping.timing} | `;
+                }
+                if (abilityMapping.description) {
+                  displayDescription = `${timing}${abilityMapping.description}\n\n📜 Description complète: ${ruleDescription}`;
+                } else {
+                  displayDescription = `${timing}${ruleDescription}`;
+                }
+              }
+              
+              console.log('🔍 DEBUG: Ajout de la suggestion Indomitable Heroes');
+              newSuggestions.push({
+                id: `army-rule-${ruleName}`,
+                text: `🛡️ Imperial Knights Army: ${ruleName}`,
+                detail: displayDescription,
+                type: 'ability', // Changer en 'ability' pour que l'interface reconnaisse l'expansion
+                phase: currentPhase,
+                timing: abilityMapping?.timing || 'Règle d\'armée active'
+              });
+            }
+          }
+        }
+        
+        // Traiter "Code Chivalric" (déjà géré par la sélection d'Oath)
+        if (ruleName === 'Code Chivalric') {
+          // Cette règle est gérée par la sélection d'Oath, pas besoin de l'afficher ici
+          return;
+        }
+      });
+    }
+    
+    // Ajouter les Oaths Imperial Knights si un Oath a été sélectionné
+    if (finalIsImperialKnights && selectedOath && activePlayer === 'player') {
+      if (selectedOath === 'Lay Low The Tyrant' && (currentPhase === 'shooting' || currentPhase === 'fight')) {
+        newSuggestions.push({
+          id: 'imperial-knights-oath-lay-low',
+          text: `⚔️ Imperial Knights - Lay Low The Tyrant (Oath)`,
+          detail: `🛡️ **Oath Ability Active**\n\nChaque fois que cette unité est sélectionnée pour tirer ou combattre, vous pouvez relancer un jet de touche et un jet de blessure.\n\n🎯 **Deed en cours** : Détruire l'ennemi WARLORD\n\n💎 Si le Deed est accompli : votre armée devient Honoured (+3CP)`,
+          type: 'ability',
+          phase: currentPhase,
+          timing: 'Active Oath Ability'
+        });
+      }
+      
+      if (selectedOath === 'Reclaim the Realm' && (currentPhase === 'movement' || currentPhase === 'charge')) {
+        newSuggestions.push({
+          id: 'imperial-knights-oath-reclaim',
+          text: `⚔️ Imperial Knights - Reclaim the Realm (Oath)`,
+          detail: `🏰 **Oath Ability Active**\n\nAjoutez 1" à la caractéristique de Mouvement de cette unité et +1 aux jets d'Advance et de Charge.\n\n🎯 **Deed en cours** : Contrôler un objectif dans la zone de déploiement ennemie\n\n💎 Si le Deed est accompli : votre armée devient Honoured (+3CP)`,
+          type: 'ability',
+          phase: currentPhase,
+          timing: 'Active Oath Ability'
+        });
+      }
+    }
 
     // Afficher les capacités selon la sélection d'unité
     if (armyData && armyData.units) {
@@ -1221,7 +1668,7 @@ const Warhammer40kAssistant = () => {
                 'Ruthless Efficiency', 'Eye of the Ancestors', 'Oath of Moment',
                 'Combat Doctrines', 'Angels of Death', 'And They Shall Know No Fear',
                 'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
-                'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save', 'Deep Strike',
+                'Leader', 'Leaders', 'Feel No Pain', 'Deep Strike',
                 'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
                 'Conversion', 'Damaged:'
               ];
@@ -1280,7 +1727,7 @@ const Warhammer40kAssistant = () => {
                     'Ruthless Efficiency', 'Eye of the Ancestors', 'Oath of Moment',
                     'Combat Doctrines', 'Angels of Death', 'And They Shall Know No Fear',
                     'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
-                    'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save', 'Deep Strike',
+                    'Leader', 'Leaders', 'Feel No Pain', 'Deep Strike',
                     'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
                     'Conversion', 'Damaged:'
                   ];
@@ -1523,9 +1970,9 @@ const Warhammer40kAssistant = () => {
                     'Blast', 'Hazardous', 'Heavy', 'Indirect', 'Ignores Cover',
                     'One Shot', 'Pistol', 'Precision', 'Rapid Fire', 'Torrent',
                     'Twin-linked', 'Assault', 'Melta', 'Lance', 'Psychic',
-                    'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save',
+                    'Leader', 'Leaders', 'Feel No Pain',
                     'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
-                    'Conversion', 'Damaged:'
+                    'Conversion', 'Damaged:', 'Code Chivalric', 'Protection Protocols'
                   ];
                   
                   // Ignorer si c'est une règle d'arme
@@ -1583,9 +2030,9 @@ const Warhammer40kAssistant = () => {
                         'Ruthless Efficiency', 'Eye of the Ancestors', 'Oath of Moment',
                         'Combat Doctrines', 'Angels of Death', 'And They Shall Know No Fear',
                         'Bolter Discipline', 'Shock Assault', 'Chapter Tactic', 'Detachment Rule',
-                        'Leader', 'Leaders', 'Feel No Pain', 'Invulnerable Save',
+                        'Leader', 'Leaders', 'Feel No Pain',
                         'Infiltrators', 'Scouts', 'Stealth', 'Lone Operative', 'Deadly Demise',
-                        'Conversion', 'Damaged:'
+                        'Conversion', 'Damaged:', 'Code Chivalric', 'Protection Protocols'
                       ];
                       
                       // Ignorer si c'est une règle d'armée
@@ -1658,7 +2105,7 @@ const Warhammer40kAssistant = () => {
           newSuggestions.push({
             id: `stratagem-${stratagem.name}`,
             text: `🎯 ${stratagem.name} (${stratagem.cost}CP)`,
-            detail: `${stratagem.timing} - ${stratagem.description}${canAfford ? '' : ' ⚠️ Pas assez de CP'}`,
+            detail: `${stratagem.timing} - ${(stratagem as any).effect || (stratagem as any).description}${canAfford ? '' : ' ⚠️ Pas assez de CP'}`,
             type: 'stratagem',
             phase: currentPhase,
             priority: canAfford ? 'high' : 'medium',
@@ -1860,17 +2307,20 @@ const Warhammer40kAssistant = () => {
                     </div>
                     <p className="text-sm text-gray-400">Source: {rule.source}</p>
                   </div>
-                  <CheckCircle 
-                    className={`h-8 w-8 cursor-pointer transition-colors flex-shrink-0 ${
-                      resolvedRules[index] 
-                        ? 'text-green-500 hover:text-green-400' 
-                        : 'text-gray-500 hover:text-gray-400'
-                    }`}
-                    onClick={() => setResolvedRules(prev => ({
-                      ...prev,
-                      [index]: !prev[index]
-                    }))}
-                  />
+                  {/* Masquer la case verte pour "Code Chivalric" car la sélection d'Oath suffit */}
+                  {rule.name !== 'Code Chivalric' && (
+                    <CheckCircle 
+                      className={`h-8 w-8 cursor-pointer transition-colors flex-shrink-0 ${
+                        resolvedRules[index] 
+                          ? 'text-green-500 hover:text-green-400' 
+                          : 'text-gray-500 hover:text-gray-400'
+                      }`}
+                      onClick={() => setResolvedRules(prev => ({
+                        ...prev,
+                        [index]: !prev[index]
+                      }))}
+                    />
+                  )}
                 </div>
                 
                 {expandedRules[index] && (
@@ -1884,6 +2334,50 @@ const Warhammer40kAssistant = () => {
                     <h4 className="font-semibold text-blue-300 mb-2">🎯 Action requise :</h4>
                     <p className="text-blue-100 text-sm mb-3">Marquez 2 unités ennemies sur la table - elles commencent avec 2 Judgement tokens chacune</p>
                     <div className="text-xs text-blue-200">✓ Placez des marqueurs sur 2 unités ennemies différentes</div>
+                  </div>
+                )}
+                
+                {rule.name === 'Code Chivalric' && (
+                  <div className="p-4 bg-indigo-900 rounded border border-indigo-600">
+                    <h4 className="font-semibold text-indigo-300 mb-2">⚔️ Sélection d'Oath requise :</h4>
+                    <div className="space-y-3">
+                      <div 
+                        className={`bg-indigo-800 rounded p-3 cursor-pointer border-2 transition-colors ${
+                          selectedOath === 'Lay Low The Tyrant' 
+                            ? 'border-green-400 bg-indigo-700' 
+                            : 'border-transparent hover:border-indigo-400'
+                        }`}
+                        onClick={() => setSelectedOath('Lay Low The Tyrant')}
+                      >
+                        <h5 className="font-semibold text-indigo-200 mb-1">🛡️ Lay Low The Tyrant</h5>
+                        <p className="text-indigo-100 text-sm mb-1">• Oath Ability: Re-roll one Hit roll et un Wound roll lors des attaques</p>
+                        <p className="text-indigo-100 text-sm">• Deed: Détruire l'ennemi WARLORD</p>
+                        {selectedOath === 'Lay Low The Tyrant' && (
+                          <div className="text-green-400 text-sm mt-2">✅ Sélectionné</div>
+                        )}
+                      </div>
+                      <div 
+                        className={`bg-indigo-800 rounded p-3 cursor-pointer border-2 transition-colors ${
+                          selectedOath === 'Reclaim the Realm' 
+                            ? 'border-green-400 bg-indigo-700' 
+                            : 'border-transparent hover:border-indigo-400'
+                        }`}
+                        onClick={() => setSelectedOath('Reclaim the Realm')}
+                      >
+                        <h5 className="font-semibold text-indigo-200 mb-1">🏰 Reclaim the Realm</h5>
+                        <p className="text-indigo-100 text-sm mb-1">• Oath Ability: +1" Move et +1 aux rolls Advance/Charge</p>
+                        <p className="text-indigo-100 text-sm">• Deed: Contrôler un objectif dans la zone de déploiement ennemie</p>
+                        {selectedOath === 'Reclaim the Realm' && (
+                          <div className="text-green-400 text-sm mt-2">✅ Sélectionné</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-indigo-200 mt-2">💎 Si le Deed est accompli : votre armée devient Honoured (+3CP)</div>
+                      {selectedOath && (
+                        <div className="text-green-400 text-sm mt-2">
+                          🎯 Oath sélectionné : <strong>{selectedOath}</strong>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
                 
@@ -1907,9 +2401,25 @@ const Warhammer40kAssistant = () => {
         <div className="text-center">
           <button 
             onClick={startScoutsPhase} 
-            disabled={battleStartRules.length > 0 && !battleStartRules.every((_, index) => resolvedRules[index])}
+            disabled={
+              battleStartRules.length > 0 && !battleStartRules.every((rule, index) => {
+                // Pour "Code Chivalric", considérer comme résolu si un Oath est sélectionné
+                if (rule.name === 'Code Chivalric') {
+                  return selectedOath !== null;
+                }
+                // Pour les autres règles, utiliser resolvedRules[index]
+                return resolvedRules[index];
+              })
+            }
             className={`px-8 py-4 rounded-lg transition-colors text-lg font-semibold flex items-center justify-center mx-auto space-x-3 ${
-              battleStartRules.length === 0 || battleStartRules.every((_, index) => resolvedRules[index])
+              battleStartRules.length === 0 || battleStartRules.every((rule, index) => {
+                // Pour "Code Chivalric", considérer comme résolu si un Oath est sélectionné
+                if (rule.name === 'Code Chivalric') {
+                  return selectedOath !== null;
+                }
+                // Pour les autres règles, utiliser resolvedRules[index]
+                return resolvedRules[index];
+              })
                 ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
@@ -2124,6 +2634,7 @@ const Warhammer40kAssistant = () => {
                  setSuggestions([]);
                  setExpandedRules({});
                  setResolvedRules({});
+                 setSelectedOath(null);
                }}
                className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-lg transition-colors text-lg font-semibold mx-4"
              >
@@ -2148,6 +2659,7 @@ const Warhammer40kAssistant = () => {
                  setSuggestions([]);
                  setExpandedRules({});
                  setResolvedRules({});
+                 setSelectedOath(null);
                }}
                className="bg-green-600 hover:bg-green-700 px-8 py-4 rounded-lg transition-colors text-lg font-semibold mx-4"
              >
